@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AgroMapa Colombia - Arquitectura C4</title>
+<style>
+:root{
+  --bg:#f7f5ed;--card:#fff;--ink:#182318;--muted:#657063;--line:#d8e5d4;
+  --green:#166534;--green2:#15803d;--blue:#0369a1;--brown:#92400e;--orange:#c2410c;--purple:#7e22ce;
+  --shadow:0 18px 44px rgba(20,83,45,.13);--r:22px
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at top left,rgba(132,204,22,.18),transparent 30rem),linear-gradient(#fbfaf5,var(--bg));color:var(--ink)}
+main{width:min(1240px,calc(100% - 32px));margin:auto;padding:32px 0 60px}
+.hero{background:linear-gradient(135deg,#14532d,#166534,#075985);color:white;border-radius:32px;padding:36px;box-shadow:var(--shadow)}
+.badge{display:inline-flex;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:.78rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+h1{margin:18px 0 10px;font-size:clamp(2rem,6vw,4.7rem);line-height:.94;letter-spacing:-.06em}
+.hero p{max-width:960px;color:rgba(255,255,255,.9);font-size:1.08rem;line-height:1.65}
+.nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.nav a{color:white;text-decoration:none;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-weight:800}
+.title{margin:34px 0 16px}
+.title h2{margin:0;font-size:1.65rem;letter-spacing:-.04em}
+.title p{margin:6px 0 0;color:var(--muted);line-height:1.55}
+.diagram{background:rgba(255,255,255,.86);border:1px solid var(--line);border-radius:30px;padding:22px;box-shadow:var(--shadow);overflow:hidden}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.legend span{display:inline-flex;gap:8px;align-items:center;background:white;border:1px solid var(--line);border-radius:999px;padding:8px 11px;color:var(--muted);font-weight:700;font-size:.86rem}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}.person{background:var(--brown)}.system{background:var(--green)}.external{background:var(--blue)}.data{background:var(--orange)}.ai{background:var(--purple)}
+.grid3{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:18px;align-items:stretch}
+.stack{display:grid;gap:14px}
+.box{background:white;border:1px solid var(--line);border-radius:var(--r);padding:18px;min-height:116px;position:relative;box-shadow:0 10px 24px rgba(20,83,45,.06)}
+.box:before{content:"";position:absolute;inset:0 0 auto 0;height:6px;background:var(--green);border-radius:var(--r) var(--r) 0 0}
+.box.person:before{background:var(--brown)}.box.external:before{background:var(--blue)}.box.data:before{background:var(--orange)}.box.ai:before{background:var(--purple)}
+.box.main{min-height:290px;display:grid;place-items:center;text-align:center;border:2px solid #86efac;background:linear-gradient(#fff,#f0fdf4)}
+.type{display:inline-flex;border-radius:999px;background:#f0fdf4;color:var(--green);font-size:.72rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase;padding:5px 9px}
+h3{margin:7px 0 8px;font-size:1.08rem}
+p{margin:0;color:var(--muted);line-height:1.5;font-size:.93rem}
+ul{margin:0;padding-left:18px;line-height:1.65;font-size:.9rem}
+.containers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{background:white;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 10px 24px rgba(20,83,45,.06)}
+.head{background:var(--green);color:white;padding:16px 18px}.head.blue{background:var(--blue)}.head.brown{background:var(--brown)}.head.orange{background:var(--orange)}.head.purple{background:var(--purple)}
+.head small{display:block;opacity:.88;font-weight:900;text-transform:uppercase;font-size:.72rem;letter-spacing:.05em}.head h3{margin:5px 0 0}
+.body{padding:16px 18px}.body p{margin-bottom:12px}
+.rel{display:grid;grid-template-columns:1fr 72px 1fr;gap:12px;align-items:center;margin:16px 0;text-align:center;color:var(--green);font-weight:900}.arrow{font-size:2rem}
+.components{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:16px}
+.col{border:1px solid var(--line);border-radius:26px;padding:16px;background:#fcfffc}
+.col h3{margin:0 0 14px;color:#14532d}
+.mini{background:white;border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px}.mini:last-child{margin-bottom:0}.mini b{display:block;margin-bottom:5px;color:#14532d}.mini span{color:var(--muted);font-size:.88rem;line-height:1.45}
+.codegrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+pre{margin:0;background:#0f1f17;color:#dcfce7;border-radius:22px;padding:18px;white-space:pre-wrap;line-height:1.55;overflow:auto;font-size:.9rem}
+.seq{display:grid;gap:12px;counter-reset:step}
+.row{display:grid;grid-template-columns:56px 1fr;gap:12px;background:white;border:1px solid var(--line);border-radius:18px;padding:14px}
+.row:before{counter-increment:step;content:counter(step);display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--green);color:white;font-weight:900}
+.row h4{margin:0 0 5px}
+.decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.decision{background:white;border:1px solid var(--line);border-radius:22px;padding:18px}.decision h3{margin:0 0 9px;color:#14532d}
+footer{text-align:center;margin-top:32px;color:var(--muted)}
+@media(max-width:1050px){.grid3,.containers,.components,.codegrid,.decisions,.rel{grid-template-columns:1fr}.hero{padding:26px}.arrow{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+<main>
+<section class="hero">
+<span class="badge">C4 Model · Ingeniería de software</span>
+<h1>AgroMapa Colombia — Arquitectura C4</h1>
+<p>Plataforma geoespacial agroproductiva: productores registran fincas y cosechas, compradores encuentran materia prima por territorio, y el sistema combina React, FastAPI, Supabase, datos públicos, RAG, OpenRouter y una futura capa de realidad aumentada.</p>
+<nav class="nav">
+<a href="#c1">C1 Contexto</a><a href="#c2">C2 Contenedores</a><a href="#c3">C3 Componentes</a><a href="#data">Datos</a><a href="#flows">Flujos</a><a href="#decisions">Decisiones</a>
+</nav>
+</section>
+
+<section id="c1" class="title"><h2>C1 — System Context</h2><p>Quién usa AgroMapa Colombia y con qué sistemas externos se comunica.</p></section>
+<section class="diagram">
+<div class="legend"><span><i class="dot person"></i>Persona</span><span><i class="dot system"></i>Sistema principal</span><span><i class="dot external"></i>Sistema externo</span><span><i class="dot data"></i>Datos</span><span><i class="dot ai"></i>IA</span></div>
+<div class="grid3">
+<div class="stack">
+<article class="box person"><span class="type">Person</span><h3>Productor rural</h3><p>Registra finca, cultivos, disponibilidad, fotos y datos de contacto.</p></article>
+<article class="box person"><span class="type">Person</span><h3>Comprador</h3><p>Busca materia prima por cultivo, cantidad, ubicación, temporada y distancia.</p></article>
+<article class="box person"><span class="type">Person</span><h3>Administrador / entidad</h3><p>Valida información, analiza territorios y consulta indicadores productivos.</p></article>
+</div>
+<article class="box main"><div><span class="type">Software System</span><h3>AgroMapa Colombia</h3><p>Plataforma web geoespacial para mapear producción agrícola, caracterizar productores, conectar oferta con demanda y analizar contexto agroambiental colombiano.</p></div></article>
+<div class="stack">
+<article class="box external"><span class="type">External System</span><h3>APIs agroambientales</h3><p>EVA/UPRA, SIPRA, IDEAM, Datos Abiertos, SiB/GBIF.</p></article>
+<article class="box data"><span class="type">External System</span><h3>Supabase</h3><p>PostgreSQL, Storage, RLS y pgvector para datos operativos y búsqueda semántica.</p></article>
+<article class="box ai"><span class="type">External System</span><h3>OpenRouter</h3><p>Modelos LLM para asistente agroproductivo con contexto del mapa y RAG.</p></article>
+</div>
+</div>
+</section>
+
+<section id="c2" class="title"><h2>C2 — Container Diagram</h2><p>Aplicaciones, bases de datos y servicios que componen el sistema.</p></section>
+<section class="diagram">
+<div class="containers">
+<article class="card"><div class="head"><small>Container · Web App</small><h3>React Frontend</h3></div><div class="body"><p>Dashboard, mapa, filtros, perfiles de finca, gráficas y chat.</p><ul><li>React + Vite</li><li>Leaflet / MapLibre</li><li>Zustand</li><li>Recharts</li></ul></div></article>
+<article class="card"><div class="head blue"><small>Container · API Application</small><h3>FastAPI Backend</h3></div><div class="body"><p>Monolito modular con endpoints por dominio y reglas de negocio.</p><ul><li>geo, farms, production</li><li>marketplace, analytics</li><li>rag, assistant, etl</li><li>schemas y services</li></ul></div></article>
+<article class="card"><div class="head orange"><small>Container · Database</small><h3>Supabase PostgreSQL</h3></div><div class="body"><p>Datos territoriales, productores, fincas, producción y solicitudes.</p><ul><li>PostgreSQL</li><li>Storage para fotos</li><li>pgvector</li><li>RLS futuro</li></ul></div></article>
+</div>
+<div class="rel"><div>HTTPS / JSON</div><div class="arrow">→</div><div>REST API / validación / normalización</div></div>
+<div class="containers">
+<article class="card"><div class="head brown"><small>Container · ETL Module</small><h3>Data Ingestion</h3></div><div class="body"><p>Consulta, normaliza y guarda datos agroambientales.</p><ul><li>Jobs manuales o programados</li><li>etl_log</li><li>Deduplicación</li><li>Normalización territorial</li></ul></div></article>
+<article class="card"><div class="head purple"><small>Container · AI/RAG</small><h3>RAG + OpenRouter</h3></div><div class="body"><p>Recupera contexto desde pgvector y responde con LLM.</p><ul><li>rag_documents</li><li>rag_chunks</li><li>match_rag_chunks()</li><li>Modelo principal + fallback</li></ul></div></article>
+<article class="card"><div class="head blue"><small>Future Container</small><h3>AR / 3D Layer</h3></div><div class="body"><p>Visualización futura de fincas, cultivos y producción en realidad aumentada.</p><ul><li>QR por finca</li><li>Tarjetas AR</li><li>ar_assets</li><li>Vista móvil</li></ul></div></article>
+</div>
+</section>
+
+<section id="c3" class="title"><h2>C3 — Component Diagram del backend FastAPI</h2><p>Vista interna del monolito modular. Cada router delega lógica a servicios.</p></section>
+<section class="diagram">
+<div class="components">
+<div class="col"><h3>Routers / API Layer</h3>
+<div class="mini"><b>geo_router</b><span>Zonas, jerarquía territorial, puntos del mapa y ubicación.</span></div>
+<div class="mini"><b>farms_router</b><span>CRUD de fincas, foto, ubicación y descripción.</span></div>
+<div class="mini"><b>production_router</b><span>Cultivos, lotes, disponibilidad, cosechas y unidades.</span></div>
+<div class="mini"><b>marketplace_router</b><span>Búsqueda de oferta y solicitudes de compra.</span></div>
+<div class="mini"><b>analytics_router</b><span>KPIs, gráficas y comparaciones territoriales.</span></div>
+<div class="mini"><b>assistant_router</b><span>Chat IA con contexto de zona, filtros, producción y RAG.</span></div>
+</div>
+<div class="col"><h3>Services / Business Layer</h3>
+<div class="mini"><b>supabase_service</b><span>Cliente central para leer/escribir en PostgreSQL y Storage.</span></div>
+<div class="mini"><b>geo_service</b><span>Normaliza departamentos, municipios, veredas y coordenadas.</span></div>
+<div class="mini"><b>farm_service</b><span>Reglas de finca, verificación y perfil público.</span></div>
+<div class="mini"><b>production_service</b><span>Disponibilidad, cantidades, estados y agregaciones.</span></div>
+<div class="mini"><b>marketplace_service</b><span>Matching por cultivo, cantidad y distancia.</span></div>
+<div class="mini"><b>rag_service</b><span>Embeddings, búsqueda semántica y armado de contexto.</span></div>
+<div class="mini"><b>openrouter_service</b><span>Invocación segura de modelos y fallback.</span></div>
+<div class="mini"><b>etl_service</b><span>Ingesta de fuentes públicas y logs.</span></div>
+</div>
+<div class="col"><h3>Data / External Layer</h3>
+<div class="mini"><b>Supabase tables</b><span>geo_zones, farms, production_batches, buyer_requests.</span></div>
+<div class="mini"><b>Supabase Storage</b><span>Fotos de fincas, productores, cultivos y assets futuros.</span></div>
+<div class="mini"><b>Supabase pgvector</b><span>rag_documents, rag_chunks, embeddings y búsqueda semántica.</span></div>
+<div class="mini"><b>Public APIs</b><span>Fuentes agroproductivas, climáticas y ambientales.</span></div>
+<div class="mini"><b>OpenRouter API</b><span>LLM principal/fallback para asistente contextual.</span></div>
+</div>
+</div>
+</section>
+
+<section id="data" class="title"><h2>Modelo de datos técnico inicial</h2><p>Tablas mínimas para mapa, fincas, producción y conexión comercial.</p></section>
+<section class="diagram">
+<div class="codegrid">
+<pre>geo_zones
+- id uuid pk
+- code text unique
+- name text
+- zone_type enum
+  country | department | municipality | village
+- parent_code text fk
+- centroid_lat double
+- centroid_lon double
+- geojson jsonb
+
+producer_profiles
+- id uuid pk
+- full_name text
+- phone text
+- email text
+- organization text
+- description text
+- verified_status enum
+
+farms
+- id uuid pk
+- producer_id uuid fk
+- zone_code text fk
+- name text
+- description text
+- profile_photo_url text
+- latitude double
+- longitude double
+- area_hectares numeric
+- address_text text</pre>
+<pre>crops
+- id uuid pk
+- name text
+- category text
+- scientific_name text optional
+
+production_batches
+- id uuid pk
+- farm_id uuid fk
+- crop_id uuid fk
+- quantity_kg numeric
+- available_kg numeric
+- harvest_date date
+- availability_status enum
+  available | soon | reserved | sold_out
+- quality_notes text
+- price_reference numeric
+- metadata jsonb
+
+buyer_requests
+- id uuid pk
+- buyer_name text
+- buyer_contact text
+- crop_id uuid fk
+- required_quantity_kg numeric
+- target_zone_code text
+- max_distance_km numeric
+- status enum</pre>
+</div>
+</section>
+
+<section id="flows" class="title"><h2>Flujos principales</h2><p>Secuencias convertibles en endpoints, servicios y pruebas.</p></section>
+<section class="diagram">
+<h3>Flujo A — Cargar mapa productivo</h3>
+<div class="seq">
+<div class="row"><div><h4>React solicita puntos productivos</h4><p>MapPage envía filtros: territorio, cultivo, disponibilidad, cantidad mínima y zoom.</p></div></div>
+<div class="row"><div><h4>FastAPI valida parámetros</h4><p>geo_router y production_router validan query params con schemas.</p></div></div>
+<div class="row"><div><h4>production_service consulta Supabase</h4><p>Obtiene fincas, lotes de producción y agregaciones por zona.</p></div></div>
+<div class="row"><div><h4>Backend normaliza respuesta</h4><p>Devuelve GeoJSON o JSON listo para Leaflet/MapLibre.</p></div></div>
+<div class="row"><div><h4>Frontend renderiza mapa y panel</h4><p>El mapa pinta puntos; el panel muestra finca, cultivo, kg disponibles y contacto.</p></div></div>
+</div>
+<br>
+<h3>Flujo B — Comprador busca materia prima</h3>
+<div class="seq">
+<div class="row"><div><h4>Comprador define necesidad</h4><p>Ejemplo: plátano, 800 kg, cerca de Buga, máximo 40 km.</p></div></div>
+<div class="row"><div><h4>marketplace_service busca oferta</h4><p>Filtra por cultivo, disponibilidad, cantidad, territorio y distancia.</p></div></div>
+<div class="row"><div><h4>Sistema recomienda alternativas</h4><p>Si una finca no alcanza la cantidad, combina o sugiere fincas cercanas.</p></div></div>
+<div class="row"><div><h4>Comprador revisa fichas</h4><p>Ve foto, descripción, cantidad, disponibilidad, ubicación y contacto.</p></div></div>
+<div class="row"><div><h4>Se registra solicitud</h4><p>buyer_requests guarda trazabilidad de intención comercial.</p></div></div>
+</div>
+<br>
+<h3>Flujo C — Pregunta al asistente IA</h3>
+<div class="seq">
+<div class="row"><div><h4>Usuario pregunta</h4><p>“¿Dónde puedo conseguir 800 kg de plátano cerca de Buga?”</p></div></div>
+<div class="row"><div><h4>assistant_router arma contexto operativo</h4><p>Zona activa, filtros, fincas visibles, disponibilidad y KPIs.</p></div></div>
+<div class="row"><div><h4>rag_service recupera contexto técnico</h4><p>Documentos sobre clima, temporada, cultivo, suelo o datos públicos.</p></div></div>
+<div class="row"><div><h4>openrouter_service genera respuesta</h4><p>El prompt exige no inventar oferta y diferenciar datos reales de recomendaciones.</p></div></div>
+<div class="row"><div><h4>Respuesta queda registrada</h4><p>assistant_messages guarda pregunta, respuesta, zona y metadatos.</p></div></div>
+</div>
+</section>
+
+<section id="decisions" class="title"><h2>Decisiones de arquitectura</h2><p>Reglas técnicas para mantener el proyecto entendible, mantenible y escalable.</p></section>
+<section class="decisions">
+<article class="decision"><h3>Monolito modular</h3><p>Un solo deploy para reducir complejidad operativa, pero con routers, services y schemas separados por dominio.</p></article>
+<article class="decision"><h3>Backend como autoridad</h3><p>El frontend no consulta Supabase ni OpenRouter directamente. El backend protege claves, valida y normaliza.</p></article>
+<article class="decision"><h3>Datos propios primero</h3><p>La caracterización de productores es la fuente principal. Las APIs públicas enriquecen y contextualizan.</p></article>
+<article class="decision"><h3>IA con evidencia</h3><p>El asistente usa datos del mapa, KPIs y RAG. No debe inventar disponibilidad, precios ni contactos.</p></article>
+<article class="decision"><h3>Fallbacks obligatorios</h3><p>Mapa, perfiles y filtros deben funcionar aunque fallen OpenRouter, RAG o APIs externas.</p></article>
+<article class="decision"><h3>Escalabilidad progresiva</h3><p>Primero mapa y producción; luego marketplace, ETL, RAG, IA, gamificación y AR.</p></article>
+</section>
+<footer>AgroMapa Colombia · C4 architecture draft · Nivel ingeniería / portafolio técnico.</footer>
+</main>
+</body>
+</html>
