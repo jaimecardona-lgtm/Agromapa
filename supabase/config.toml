@@ -1,0 +1,30 @@
+# Supabase Configuration
+
+[project]
+project_id = "agromapa-colombia"
+
+[db]
+major_version = 15
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[realtime]
+enabled = true
+max_bytes_per_second = 1048576
+
+[auth]
+enabled = true
+email_autoconfirm = false
+phone_autoconfirm = false
+
+[storage]
+enabled = true
+file_size_limit = 52428800
+
+[functions]
+nodejs_version = 18
