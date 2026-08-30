@@ -1,0 +1,46 @@
+.status-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.status-panel.loading {
+  text-align: center;
+  color: #666;
+  padding: 1rem 2rem;
+}
+
+.status-panel.error {
+  background: #f8d7da;
+  color: #721c24;
+  text-align: center;
+  padding: 1rem 2rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.status-item {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #007bff;
+}
+
+.status-label {
+  font-size: 0.85rem;
+  color: #666;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.status-value {
+  font-size: 1rem;
+  font-weight: 600;
+}

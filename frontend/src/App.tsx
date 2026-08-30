@@ -1,54 +1,84 @@
 import { useEffect, useState } from 'react';
-import { HealthStatus } from '@/types/health';
-import { HealthCheck } from '@/components/HealthCheck';
+import { api, HealthStatus, MapPoint } from '@/services/api';
+import { Map } from '@/components/Map';
+import { StatusPanel } from '@/components/StatusPanel';
+import { RoadmapCard } from '@/components/RoadmapCard';
 import './App.css';
 
 function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [mapPoints, setMapPoints] = useState<MapPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkHealth = async () => {
+    const fetchData = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiBase}/api/health`);
-        const data = await response.json();
-        setHealth(data);
-      } catch (error) {
-        console.error('Failed to check health:', error);
-        setHealth({
-          status: 'error',
-          environment: 'unknown',
-          version: '0.1.0',
-          timestamp: new Date().toISOString(),
-        });
+        const [healthRes, mapRes] = await Promise.all([
+          api.health.check(),
+          api.demo.getMapPoints(),
+        ]);
+
+        setHealth(healthRes.data);
+        setMapPoints(mapRes.data);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError('No se pudo conectar con el servidor');
       } finally {
         setLoading(false);
       }
     };
 
-    checkHealth();
+    fetchData();
   }, []);
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>AgroMapa Colombia</h1>
-        <p>Plataforma de Mapeo Digital Agroproductivo</p>
+        <div className="header-content">
+          <h1>🗺️ AgroMapa Colombia</h1>
+          <p>Plataforma geoespacial agroproductiva para conectar territorio, productores y demanda</p>
+        </div>
       </header>
 
       <main className="app-main">
-        <section className="status-section">
-          <h2>Estado del Sistema</h2>
-          {loading ? (
-            <p className="loading">Verificando estado...</p>
-          ) : health ? (
-            <HealthCheck health={health} />
-          ) : (
-            <p className="error">No se pudo conectar con el servidor</p>
-          )}
-        </section>
+        <div className="container">
+          <section className="section">
+            <h2>Visor Geoespacial Piloto</h2>
+            <p className="section-description">Puntos demostrativos del Valle del Cauca</p>
+            {error ? (
+              <div className="error-box">{error}</div>
+            ) : (
+              <Map points={mapPoints} />
+            )}
+          </section>
+
+          <section className="section">
+            <h2>Estado del Sistema</h2>
+            <StatusPanel health={health} loading={loading} />
+          </section>
+
+          <section className="section">
+            <RoadmapCard />
+          </section>
+
+          <section className="section info-box">
+            <h3>ℹ️ Información</h3>
+            <p>
+              Esta es una demostración del Sprint 01 de AgroMapa Colombia. Los datos mostrados en el mapa
+              son puramente demostrativos y están marcados como <strong>demo: true</strong>.
+            </p>
+            <p>
+              El sistema está preparado con PostGIS para operaciones geoespaciales y pgvector para
+              búsqueda semántica e integración futura de IA.
+            </p>
+          </section>
+        </div>
       </main>
+
+      <footer className="app-footer">
+        <p>AgroMapa Colombia © 2026 - Sprint 01: Foundation</p>
+      </footer>
     </div>
   );
 }

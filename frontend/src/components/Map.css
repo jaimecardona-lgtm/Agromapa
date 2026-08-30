@@ -1,0 +1,38 @@
+.map-container {
+  height: 500px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 2rem 0;
+}
+
+.map {
+  height: 100%;
+  width: 100%;
+}
+
+.popup-content h4 {
+  margin: 0.5rem 0;
+  color: #333;
+}
+
+.popup-content p {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.demo-badge {
+  display: inline-block;
+  background: #ffc107;
+  color: #333;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+:global(.leaflet-container) {
+  font-family: system-ui, -apple-system, sans-serif;
+}
