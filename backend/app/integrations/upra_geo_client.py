@@ -21,6 +21,7 @@ class GeoUnit(BaseModel):
     dane_code: str
     name: str
     geojson: dict[str, Any]
+    department_dane_code: str | None = None
 
 
 class UPRAGeoClient:
@@ -229,6 +230,7 @@ class UPRAGeoClient:
                 try:
                     dane_code = props.get("cod_dane_mpio") or props.get("CODIGO") or ""
                     name = props.get("municipio") or props.get("NOMBRE") or ""
+                    dept_code = props.get("cod_dane_depto") or ""
 
                     if dane_code and name:
                         result.append(
@@ -236,6 +238,7 @@ class UPRAGeoClient:
                                 dane_code=str(dane_code),
                                 name=str(name),
                                 geojson=geometry,
+                                department_dane_code=str(dept_code) if dept_code else None,
                             )
                         )
                 except Exception as e:

@@ -56,6 +56,37 @@ class TestGeoRepository:
             assert all("dane_code" in m for m in municipalities)
 
     @pytest.mark.asyncio
+    async def test_get_all_by_level_municipalities_with_geometry(self):
+        """Test bulk loading municipalities with GeoJSON geometry."""
+        repo = GeoRepository()
+        municipalities = await repo.get_all_by_level("municipality", include_geometry=True)
+        assert isinstance(municipalities, list)
+        if municipalities:
+            assert all("id" in m for m in municipalities)
+            assert all("geojson" in m for m in municipalities)
+
+    @pytest.mark.asyncio
+    async def test_get_departments(self):
+        """Test getting departments with geometry."""
+        repo = GeoRepository()
+        departments = await repo.get_departments()
+        assert isinstance(departments, list)
+        if departments:
+            assert all("id" in d for d in departments)
+            assert all("geojson" in d for d in departments)
+
+    @pytest.mark.asyncio
+    async def test_get_municipalities_by_department_valle(self):
+        """Test getting municipalities for Valle del Cauca (code 76)."""
+        repo = GeoRepository()
+        municipalities = await repo.get_municipalities_by_department("76")
+        assert isinstance(municipalities, list)
+        # Valle del Cauca should have municipalities
+        if municipalities:
+            assert all("parent_id" in m for m in municipalities)
+            assert all("geojson" in m for m in municipalities)
+
+    @pytest.mark.asyncio
     async def test_get_all_by_level_departments(self):
         """Test bulk loading all departments."""
         repo = GeoRepository()

@@ -60,21 +60,25 @@ async def sync_upra_geo():
         total_updated = 0
         errors_count = 0
 
-        # Fetch departments
+        # Fetch and store departments
         logger.info("Fetching departments from UPRA...")
         try:
             departments = await client.get_departments()
             logger.info(f"Got {len(departments)} departments")
 
+            # Build department lookup by dane_code
+            department_by_dane = {}
+
             for dept in departments:
                 try:
-                    await geo_repo.upsert_geo_unit(
+                    result = await geo_repo.upsert_geo_unit(
                         level="department",
                         dane_code=dept.dane_code,
                         name=dept.name,
                         geojson_geometry=dept.geojson,
                         source_id=source_id,
                     )
+                    department_by_dane[dept.dane_code] = result
                     total_processed += 1
                     total_created += 1
                 except Exception as e:
@@ -85,6 +89,8 @@ async def sync_upra_geo():
             logger.error(f"Failed to fetch departments: {e}")
             errors_count += 1
 
+        logger.info(f"Department lookup built: {len(department_by_dane)} departments")
+
         # Fetch municipalities
         logger.info("Fetching municipalities from UPRA...")
         try:
@@ -93,11 +99,18 @@ async def sync_upra_geo():
 
             for mun in municipalities:
                 try:
+                    # Get parent_id from department
+                    parent_id = None
+                    if mun.department_dane_code and mun.department_dane_code in department_by_dane:
+                        parent_geo = department_by_dane[mun.department_dane_code]
+                        parent_id = parent_geo.get("id")
+
                     await geo_repo.upsert_geo_unit(
                         level="municipality",
                         dane_code=mun.dane_code,
                         name=mun.name,
                         geojson_geometry=mun.geojson,
+                        parent_id=parent_id,
                         source_id=source_id,
                     )
                     total_processed += 1

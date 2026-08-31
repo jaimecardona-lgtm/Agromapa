@@ -22,7 +22,7 @@ class GeoRepository:
         source_id: Optional[str] = None,
         attributes: Optional[dict] = None,
     ) -> dict:
-        """Upsert a geographic unit."""
+        """Upsert a geographic unit via RPC with geometry handling."""
 
         if not supabase_service.is_configured():
             raise RuntimeError("Supabase not configured")
@@ -31,29 +31,18 @@ class GeoRepository:
 
         client = create_client(supabase_service.url, supabase_service.key)
 
-        # Build geometry SQL if provided
-        geom_sql = "NULL"
-        if geojson_geometry:
-            geom_sql = f"ST_GeomFromGeoJSON('{geojson_geometry}'::json)"
-
-        centroid_sql = "NULL"
-        if centroid_geojson:
-            centroid_sql = f"ST_GeomFromGeoJSON('{centroid_geojson}'::json)"
-
-        # Use Postgrest upsert
-        data = {
-            "level": level,
-            "dane_code": dane_code,
-            "name": name,
-            "parent_id": parent_id,
-            "source_id": source_id,
-            "attributes": attributes,
-        }
-
         try:
-            response = client.table("geo_units").upsert(
-                data,
-                on_conflict="level,dane_code",
+            response = client.rpc(
+                "upsert_geo_unit_geojson",
+                {
+                    "p_level": level,
+                    "p_dane_code": dane_code,
+                    "p_name": name,
+                    "p_parent_id": parent_id,
+                    "p_source_id": source_id,
+                    "p_attributes": attributes,
+                    "p_geojson": geojson_geometry,
+                },
             ).execute()
 
             logger.info(f"Upserted geo_unit: {level}/{dane_code}/{name}")
@@ -64,7 +53,7 @@ class GeoRepository:
             raise
 
     async def get_departments(self) -> list[dict]:
-        """Get all departments."""
+        """Get all departments with GeoJSON geometry."""
 
         if not supabase_service.is_configured():
             return []
@@ -74,7 +63,7 @@ class GeoRepository:
         client = create_client(supabase_service.url, supabase_service.key)
 
         try:
-            response = client.table("geo_units").select("*").eq("level", "department").execute()
+            response = client.table("geo_units_api").select("*").eq("level", "department").execute()
             return response.data
 
         except Exception as e:
@@ -82,7 +71,7 @@ class GeoRepository:
             return []
 
     async def get_municipalities_by_department(self, department_dane_code: str) -> list[dict]:
-        """Get municipalities for a department."""
+        """Get municipalities for a department with GeoJSON geometry."""
 
         if not supabase_service.is_configured():
             return []
@@ -93,15 +82,24 @@ class GeoRepository:
 
         try:
             # First get the department
-            dept_response = client.table("geo_units").select("id").eq("level", "department").eq(
-                "dane_code", department_dane_code
-            ).single().execute()
+            dept_response = (
+                client.table("geo_units_api")
+                .select("id")
+                .eq("level", "department")
+                .eq("dane_code", department_dane_code)
+                .limit(1)
+                .execute()
+            )
 
-            department_id = dept_response.data["id"]
+            if not dept_response.data:
+                logger.warning(f"Department not found: {department_dane_code}")
+                return []
+
+            department_id = dept_response.data[0]["id"]
 
             # Then get municipalities
             response = (
-                client.table("geo_units")
+                client.table("geo_units_api")
                 .select("*")
                 .eq("level", "municipality")
                 .eq("parent_id", department_id)
@@ -126,7 +124,7 @@ class GeoRepository:
 
         try:
             response = (
-                client.table("geo_units")
+                client.table("geo_units_api")
                 .select("*")
                 .eq("level", level)
                 .eq("dane_code", dane_code)
@@ -142,7 +140,7 @@ class GeoRepository:
             logger.debug(f"Geo unit not found: {level}/{dane_code} - {str(e)}")
             return None
 
-    async def get_all_by_level(self, level: str) -> list[dict]:
+    async def get_all_by_level(self, level: str, include_geometry: bool = False) -> list[dict]:
         """Get all geo units by level for bulk operations."""
 
         if not supabase_service.is_configured():
@@ -153,7 +151,15 @@ class GeoRepository:
         client = create_client(supabase_service.url, supabase_service.key)
 
         try:
-            response = client.table("geo_units").select("id, level, dane_code, name").eq("level", level).execute()
+            if include_geometry:
+                response = client.table("geo_units_api").select("*").eq("level", level).execute()
+            else:
+                response = (
+                    client.table("geo_units")
+                    .select("id, level, dane_code, name, parent_id")
+                    .eq("level", level)
+                    .execute()
+                )
             logger.info(f"Loaded {len(response.data)} geo units for level: {level}")
             return response.data
 
