@@ -13,6 +13,7 @@ import logging
 import sys
 
 from app.integrations.upra_geo_client import UPRAGeoClient
+from app.repositories.data_source_repository import DataSourceRepository
 from app.repositories.geo_repository import GeoRepository
 from app.repositories.sync_repository import SyncRepository
 from app.services.supabase_service import supabase_service
@@ -23,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+data_source_repo = DataSourceRepository()
 geo_repo = GeoRepository()
 sync_repo = SyncRepository()
 
@@ -35,12 +37,20 @@ async def sync_upra_geo():
         return False
 
     try:
-        # Create source if not exists (handled by migration)
+        # Get data source UUID
+        data_source = await data_source_repo.get_by_key("upra_geo")
+        if not data_source:
+            logger.error("Data source 'upra_geo' not found in database")
+            return False
+
+        source_id = data_source["id"]
+        logger.info(f"Using source_id: {source_id}")
+
         client = UPRAGeoClient()
 
-        # Create sync run
+        # Create sync run with UUID
         sync_run = await sync_repo.create_sync_run(
-            source_id="upra_geo",
+            source_id=source_id,
             sync_type="geo_units",
         )
         sync_run_id = sync_run.get("id")
@@ -63,7 +73,7 @@ async def sync_upra_geo():
                         dane_code=dept.dane_code,
                         name=dept.name,
                         geojson_geometry=dept.geojson,
-                        source_id="upra_geo",
+                        source_id=source_id,
                     )
                     total_processed += 1
                     total_created += 1
@@ -88,7 +98,7 @@ async def sync_upra_geo():
                         dane_code=mun.dane_code,
                         name=mun.name,
                         geojson_geometry=mun.geojson,
-                        source_id="upra_geo",
+                        source_id=source_id,
                     )
                     total_processed += 1
                     total_created += 1

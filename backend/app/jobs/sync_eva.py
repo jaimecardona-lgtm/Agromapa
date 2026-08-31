@@ -16,6 +16,7 @@ from typing import Optional
 
 from app.integrations.eva_client import EVAClient
 from app.repositories.agriculture_repository import AgricultureRepository
+from app.repositories.data_source_repository import DataSourceRepository
 from app.repositories.geo_repository import GeoRepository
 from app.repositories.sync_repository import SyncRepository
 from app.services.supabase_service import supabase_service
@@ -26,6 +27,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+data_source_repo = DataSourceRepository()
 geo_repo = GeoRepository()
 ag_repo = AgricultureRepository()
 sync_repo = SyncRepository()
@@ -39,11 +41,20 @@ async def sync_eva_year(year: int) -> bool:
         return False
 
     try:
+        # Get data source UUID
+        data_source = await data_source_repo.get_by_key("upra_eva")
+        if not data_source:
+            logger.error("Data source 'upra_eva' not found in database")
+            return False
+
+        source_id = data_source["id"]
+        logger.info(f"Using source_id: {source_id} for year {year}")
+
         client = EVAClient()
 
-        # Create sync run
+        # Create sync run with UUID
         sync_run = await sync_repo.create_sync_run(
-            source_id="upra_eva",
+            source_id=source_id,
             sync_type=f"agricultural_stats_{year}",
         )
         sync_run_id = sync_run.get("id")
@@ -95,7 +106,7 @@ async def sync_eva_year(year: int) -> bool:
                         area_harvested_ha=area_harvested,
                         production_tons=production,
                         yield_t_ha=yield_value,
-                        source_id="upra_eva",
+                        source_id=source_id,
                         raw_data=record.dict(),
                     )
 
