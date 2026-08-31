@@ -4,14 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import demo, health
+from app.routers import agriculture, demo, farms, health, territories
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Plataforma geoespacial agroproductiva",
-    version="0.1.0",
+    version="0.2.0",
     debug=settings.APP_DEBUG,
 )
 
@@ -28,6 +28,9 @@ app.add_middleware(
 api_v1_prefix = settings.API_V1_PREFIX
 app.include_router(health.router, prefix=api_v1_prefix, tags=["health"])
 app.include_router(demo.router, prefix=f"{api_v1_prefix}/demo", tags=["demo"])
+app.include_router(territories.router, prefix=api_v1_prefix)
+app.include_router(agriculture.router, prefix=api_v1_prefix)
+app.include_router(farms.router, prefix=api_v1_prefix)
 
 logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 
@@ -36,9 +39,14 @@ logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 async def root():
     return {
         "message": "AgroMapa Colombia API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "docs": "/docs",
         "health": "/api/health",
+        "endpoints": {
+            "territories": "/api/territories/departments",
+            "agriculture": "/api/agriculture/municipalities/{code}",
+            "farms": "/api/farms/municipalities/{code}",
+        },
     }
 
 
