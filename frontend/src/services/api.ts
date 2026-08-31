@@ -75,22 +75,22 @@ export const api = {
     check: () => apiClient.get<HealthStatus>('/api/health'),
   },
   territories: {
-    getDepartments: () => apiClient.get<{ count: number; data: GeoUnit[] }>('/territories/departments'),
+    getDepartments: () => apiClient.get<{ count: number; data: GeoUnit[] }>('/api/territories/departments'),
     getMunicipalities: (departmentCode: string) =>
       apiClient.get<{ count: number; data: GeoUnit[] }>(
-        `/territories/departments/${departmentCode}/municipalities`,
+        `/api/territories/departments/${departmentCode}/municipalities`,
       ),
     getMunicipality: (departmentCode: string, municipalityCode: string) =>
-      apiClient.get<{ data: GeoUnit }>(`/territories/departments/${departmentCode}/municipalities/${municipalityCode}`),
+      apiClient.get<{ data: GeoUnit }>(`/api/territories/departments/${departmentCode}/municipalities/${municipalityCode}`),
   },
   agriculture: {
     getMunicipality: (municipalityCode: string, year: number = 2024) =>
       apiClient.get<{ data: AgriculturalData | null }>(
-        `/agriculture/municipalities/${municipalityCode}?year=${year}`,
+        `/api/agriculture/municipalities/${municipalityCode}?year=${year}`,
       ),
   },
   farms: {
     getByMunicipality: (municipalityCode: string) =>
-      apiClient.get<{ count: number; data: Farm[] }>(`/farms/municipalities/${municipalityCode}`),
+      apiClient.get<{ count: number; data: Farm[] }>(`/api/farms/municipalities/${municipalityCode}`),
   },
 };
