@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -54,31 +54,47 @@ async def api_info():
 
 
 # Serve React frontend from static directory
-static_dir = Path(__file__).parent.parent.parent / "static"
+static_dir = Path(__file__).resolve().parents[1] / "static"
+
 if static_dir.exists():
     logger.info(f"Serving static files from {static_dir}")
-    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    assets_dir = static_dir / "assets"
+
+    if assets_dir.exists():
+        app.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="assets",
+        )
 
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    """Serve React SPA with fallback to index.html for client-side routing."""
-    # Don't interfere with API routes
+    """Serve React SPA with fallback to index.html."""
+
     if full_path.startswith("api/"):
-        return {"detail": "Not Found"}, 404
+        raise HTTPException(
+            status_code=404,
+            detail="Not Found",
+        )
 
-    # Check if file exists in static directory
     if static_dir.exists():
-        file_path = static_dir / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
+        if full_path:
+            file_path = static_dir / full_path
 
-        # Fallback to index.html for SPA routing
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+
         index_path = static_dir / "index.html"
+
         if index_path.exists():
             return FileResponse(index_path)
 
-    return {"detail": "Not Found"}, 404
+    raise HTTPException(
+        status_code=404,
+        detail="Not Found",
+    )
 
 
 if __name__ == "__main__":
