@@ -50,6 +50,16 @@ async def sync_eva_year(year: int) -> bool:
         source_id = data_source["id"]
         logger.info(f"Using source_id: {source_id} for year {year}")
 
+        # Preload all municipalities to avoid N+1 queries
+        logger.info("Preloading municipalities...")
+        municipalities_list = await geo_repo.get_all_by_level("municipality")
+        municipality_by_dane = {m["dane_code"]: m for m in municipalities_list}
+        logger.info(f"Loaded {len(municipality_by_dane)} municipalities")
+
+        if not municipality_by_dane:
+            logger.warning("No municipalities found in database. Run sync_upra_geo first.")
+            return False
+
         client = EVAClient()
 
         # Create sync run with UUID
@@ -62,6 +72,7 @@ async def sync_eva_year(year: int) -> bool:
         total_processed = 0
         total_created = 0
         errors_count = 0
+        missing_municipality_codes = set()
 
         logger.info(f"Starting EVA sync for year {year}")
 
@@ -69,15 +80,11 @@ async def sync_eva_year(year: int) -> bool:
         async for records_batch in client.paginate_year(year):
             for record in records_batch:
                 try:
-                    # Find matching geo_unit
-                    geo_unit = await geo_repo.get_by_dane_code(
-                        "municipality", record.dane_municipality_code
-                    )
+                    # Lookup in preloaded dictionary
+                    geo_unit = municipality_by_dane.get(record.dane_municipality_code)
 
                     if not geo_unit:
-                        logger.debug(
-                            f"Municipality {record.dane_municipality_code} not found, skipping"
-                        )
+                        missing_municipality_codes.add(record.dane_municipality_code)
                         continue
 
                     # Normalize numeric values
@@ -116,6 +123,12 @@ async def sync_eva_year(year: int) -> bool:
                 except Exception as e:
                     logger.error(f"Failed to process EVA record: {e}")
                     errors_count += 1
+
+        if missing_municipality_codes:
+            logger.warning(
+                f"Missing {len(missing_municipality_codes)} municipality codes: "
+                f"{sorted(missing_municipality_codes)[:10]}"
+            )
 
         # Update sync run
         await sync_repo.update_sync_run(
