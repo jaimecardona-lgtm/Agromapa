@@ -1,54 +1,52 @@
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import { GeoUnit } from '@/services/api';
 import L from 'leaflet';
-import { MapPoint } from '@/services/api';
 import './Map.css';
 
-const iconRetinaUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png';
-const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png';
-const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png';
-
-const iconDefault = L.icon({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-L.Marker.prototype.setIcon(iconDefault);
-
 interface MapProps {
-  points: MapPoint[];
+  features: GeoUnit[];
+  onFeatureClick: (feature: GeoUnit) => void;
 }
 
-export function Map({ points }: MapProps) {
-  const mapCenter: [number, number] = [4.0, -76.0];
-  const zoom = 8;
+export function Map({ features, onFeatureClick }: MapProps) {
+  const colombiaCenter: [number, number] = [4.5, -74.5];
+  const defaultZoom = 6;
+
+  const handleEachFeature = (feature: GeoUnit, layer: L.Layer) => {
+    const popupContent = `
+      <div class="popup-content">
+        <h4>${feature.name}</h4>
+        <p>Código: ${feature.dane_code}</p>
+        <p>Nivel: ${feature.level}</p>
+      </div>
+    `;
+
+    if (layer instanceof L.Popup || 'bindPopup' in layer) {
+      (layer as L.Layer & { bindPopup: (html: string) => void }).bindPopup(popupContent);
+    }
+
+    layer.on('click', () => {
+      onFeatureClick(feature);
+    });
+  };
 
   return (
     <div className="map-container">
-      <MapContainer center={mapCenter} zoom={zoom} className="map">
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {points.map((point) => (
-          <Marker key={point.id} position={[point.latitude, point.longitude]}>
-            <Popup>
-              <div className="popup-content">
-                <h4>{point.municipality}</h4>
-                <p>
-                  <strong>Cultivo:</strong> {point.crop}
-                </p>
-                <p>
-                  <strong>Disponible:</strong> {point.available_kg} kg
-                </p>
-                <span className="demo-badge">Datos demostrativos</span>
-              </div>
-            </Popup>
-          </Marker>
+      <MapContainer center={colombiaCenter} zoom={defaultZoom} className="map">
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+
+        {features.map((feature) => (
+          <GeoJSON
+            key={`${feature.level}-${feature.dane_code}`}
+            data={feature.geojson as any}
+            onEachFeature={(_, layer) => handleEachFeature(feature, layer)}
+            style={() => ({
+              color: '#667eea',
+              fillColor: '#667eea',
+              fillOpacity: 0.5,
+              weight: 2,
+            })}
+          />
         ))}
       </MapContainer>
     </div>

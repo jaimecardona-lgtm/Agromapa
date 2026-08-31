@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import agriculture, demo, farms, health, territories
+from app.routers import agriculture, farms, health, territories
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +24,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Routers - Real data only
 api_v1_prefix = settings.API_V1_PREFIX
 app.include_router(health.router, prefix=api_v1_prefix, tags=["health"])
-app.include_router(demo.router, prefix=f"{api_v1_prefix}/demo", tags=["demo"])
 app.include_router(territories.router, prefix=api_v1_prefix)
 app.include_router(agriculture.router, prefix=api_v1_prefix)
 app.include_router(farms.router, prefix=api_v1_prefix)
