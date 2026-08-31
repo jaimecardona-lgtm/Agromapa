@@ -14,20 +14,48 @@ class SupabaseService:
     def is_configured(self) -> bool:
         return bool(self.url and self.key)
 
+    def get_client(self):
+        if not self.is_configured():
+            raise RuntimeError("Supabase is not configured")
+
+        if self._client is None:
+            from supabase import create_client
+
+            self._client = create_client(
+                self.url,
+                self.key,
+            )
+
+        return self._client
+
     async def check_connection(self) -> bool:
         if not self.is_configured():
             logger.warning("Supabase not configured")
             return False
 
         try:
-            from supabase import create_client
+            client = self.get_client()
 
-            client = create_client(self.url, self.key)
-            client.table("information_schema.tables").select("*").limit(1).execute()
-            logger.info("Supabase connection successful")
-            return True
-        except Exception as e:
-            logger.error(f"Supabase connection failed: {str(e)}")
+            response = client.rpc(
+                "health_check"
+            ).execute()
+
+            if not response.data:
+                return False
+
+            status = response.data[0].get("status")
+
+            if status == "healthy":
+                logger.info("Supabase connection successful")
+                return True
+
+            return False
+
+        except Exception as exc:
+            logger.error(
+                "Supabase connection failed: %s",
+                exc,
+            )
             return False
 
 
