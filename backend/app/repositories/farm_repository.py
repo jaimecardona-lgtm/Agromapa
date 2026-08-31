@@ -93,7 +93,7 @@ class FarmRepository:
             response = client.table("farms").select("*").eq("id", farm_id).single().execute()
             return response.data
 
-        except Exception as e:
+        except Exception:
             logger.debug(f"Farm not found: {farm_id}")
             return None
 

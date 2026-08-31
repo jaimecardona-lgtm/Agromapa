@@ -5,7 +5,6 @@ Municipality of Santiago de Cali agricultural data.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

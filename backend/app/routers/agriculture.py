@@ -1,6 +1,6 @@
 """Agriculture API routes."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
 from app.services.agriculture_service import get_municipality_agriculture
 

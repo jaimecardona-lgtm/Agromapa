@@ -12,7 +12,6 @@ import argparse
 import asyncio
 import logging
 import sys
-from typing import Optional
 
 from app.integrations.eva_client import EVAClient
 from app.repositories.agriculture_repository import AgricultureRepository

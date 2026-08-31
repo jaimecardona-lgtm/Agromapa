@@ -1,6 +1,7 @@
 """Tests for integration clients."""
 
 import pytest
+
 from app.integrations.upra_geo_client import UPRAGeoClient
 
 

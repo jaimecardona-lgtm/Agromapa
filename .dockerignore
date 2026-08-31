@@ -1,0 +1,35 @@
+.git
+.gitignore
+.github
+.gitlab-ci.yml
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Frontend
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Backend
+backend/__pycache__
+backend/.pytest_cache
+backend/.ruff_cache
+backend/venv
+backend/.venv
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+
+# OS
+Thumbs.db

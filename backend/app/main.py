@@ -1,7 +1,10 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.routers import agriculture, farms, health, territories
@@ -34,8 +37,9 @@ app.include_router(farms.router, prefix=api_v1_prefix)
 logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 
 
-@app.get("/")
-async def root():
+@app.get("/api/info")
+async def api_info():
+    """API information and documentation."""
     return {
         "message": "AgroMapa Colombia API",
         "version": "0.2.0",
@@ -47,6 +51,34 @@ async def root():
             "farms": "/api/farms/municipalities/{code}",
         },
     }
+
+
+# Serve React frontend from static directory
+static_dir = Path(__file__).parent.parent.parent / "static"
+if static_dir.exists():
+    logger.info(f"Serving static files from {static_dir}")
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve React SPA with fallback to index.html for client-side routing."""
+    # Don't interfere with API routes
+    if full_path.startswith("api/"):
+        return {"detail": "Not Found"}, 404
+
+    # Check if file exists in static directory
+    if static_dir.exists():
+        file_path = static_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+
+        # Fallback to index.html for SPA routing
+        index_path = static_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+
+    return {"detail": "Not Found"}, 404
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ export function Map({ features, onFeatureClick }: MapProps) {
         {features.map((feature) => (
           <GeoJSON
             key={`${feature.level}-${feature.dane_code}`}
-            data={feature.geojson as any}
+            data={feature.geojson as GeoJSON.GeoJsonObject}
             onEachFeature={(_, layer) => handleEachFeature(feature, layer)}
             style={() => ({
               color: '#667eea',

@@ -6,7 +6,7 @@ Resource: uejq-wxrr
 """
 
 import logging
-from typing import Any, AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional
 
 import httpx
 from pydantic import BaseModel, Field
