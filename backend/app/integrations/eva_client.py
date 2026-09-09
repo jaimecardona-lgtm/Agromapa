@@ -5,6 +5,8 @@ Consumes data from Datos Abiertos Colombia Socrata API.
 Resource: uejq-wxrr
 """
 
+import hashlib
+import json
 import logging
 from typing import AsyncGenerator, Optional
 
@@ -27,6 +29,10 @@ class EVARecord(BaseModel):
     crop_desagregation: str = Field(alias="desagregaci_n_cultivo")
     year: int = Field(alias="a_o")
     period: Optional[str] = Field(alias="periodo")
+    crop_cycle: Optional[str] = Field(None, alias="ciclo_del_cultivo")
+    crop_physical_state: Optional[str] = Field(None, alias="estado_f_sico_del_cultivo")
+    crop_code: Optional[str] = Field(None, alias="c_digo_del_cultivo")
+    crop_scientific_name: Optional[str] = Field(None, alias="nombre_cient_fico_del_cultivo")
     area_planted: Optional[float] = Field(None, alias="rea_sembrada")
     area_harvested: Optional[float] = Field(None, alias="rea_cosechada")
     production: Optional[float] = Field(None, alias="producci_n")
@@ -34,6 +40,38 @@ class EVARecord(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    def generate_source_record_key(self) -> str:
+        """
+        Generate deterministic SHA-256 based source_record_key for EVA record deduplication.
+
+        Uses EVA's official crop_code (stable identifier) rather than human-readable names.
+        Canonical format ensures same record always produces identical key.
+
+        Canonical fields (sorted):
+        - municipality_dane
+        - year
+        - period
+        - crop_cycle
+        - crop_code
+        - crop_disaggregation
+
+        Returns: Full SHA-256 hex digest (64 hexadecimal characters)
+        """
+        canonical = {
+            "municipality_dane": str(self.dane_municipality_code).strip(),
+            "year": self.year,
+            "period": str(self.period or "").strip(),
+            "crop_cycle": str(self.crop_cycle or "").strip(),
+            "crop_code": str(self.crop_code or "").strip(),
+            "crop_disaggregation": str(self.crop_desagregation or "").strip(),
+        }
+
+        # JSON with sorted keys for deterministic representation
+        canonical_json = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+        hash_digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+        return hash_digest
 
 
 class EVAClient:
