@@ -141,7 +141,12 @@ class GeoRepository:
             return None
 
     async def get_all_by_level(self, level: str, include_geometry: bool = False) -> list[dict]:
-        """Get all geo units by level for bulk operations."""
+        """
+        Get all geo units by level for bulk operations.
+
+        Implements pagination to handle >1000 records (PostgREST default limit).
+        Reuses single client for efficiency.
+        """
 
         if not supabase_service.is_configured():
             return []
@@ -149,19 +154,45 @@ class GeoRepository:
         from supabase import create_client
 
         client = create_client(supabase_service.url, supabase_service.key)
+        all_results = []
+        page_size = 1000
 
         try:
-            if include_geometry:
-                response = client.table("geo_units_api").select("*").eq("level", level).execute()
-            else:
-                response = (
-                    client.table("geo_units")
-                    .select("id, level, dane_code, name, parent_id")
-                    .eq("level", level)
-                    .execute()
-                )
-            logger.info(f"Loaded {len(response.data)} geo units for level: {level}")
-            return response.data
+            page = 0
+            while True:
+                offset = page * page_size
+                range_start = offset
+                range_end = offset + page_size - 1
+
+                if include_geometry:
+                    response = (
+                        client.table("geo_units_api")
+                        .select("*")
+                        .eq("level", level)
+                        .range(range_start, range_end)
+                        .execute()
+                    )
+                else:
+                    response = (
+                        client.table("geo_units")
+                        .select("id, level, dane_code, name, parent_id")
+                        .eq("level", level)
+                        .range(range_start, range_end)
+                        .execute()
+                    )
+
+                if not response.data:
+                    break
+
+                all_results.extend(response.data)
+                page += 1
+
+                # If fewer than page_size results, we've reached the end
+                if len(response.data) < page_size:
+                    break
+
+            logger.info(f"Loaded {len(all_results)} geo units for level: {level} (pages: {page})")
+            return all_results
 
         except Exception as e:
             logger.error(f"Failed to get geo units by level: {str(e)}")

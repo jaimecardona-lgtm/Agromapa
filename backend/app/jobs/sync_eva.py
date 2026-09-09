@@ -148,7 +148,7 @@ async def sync_eva_year(
                         "yield_t_ha": yield_value,
                         "source_id": source_id,
                         "source_record_key": source_record_key,
-                        "raw_data": record.dict(),
+                        "raw_data": record.model_dump(),
                     }
 
                     if dry_run:

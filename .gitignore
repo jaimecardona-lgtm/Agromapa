@@ -59,3 +59,6 @@ frontend/build/
 
 # Supabase local
 .supabase/
+
+# Python virtual environment
+backend/.venv/
