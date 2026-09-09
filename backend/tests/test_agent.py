@@ -8,10 +8,14 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.agent_schemas import AgentChatRequest, AgentContext
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    """FastAPI test client fixture."""
+    return TestClient(app)
 
 
-def test_agent_disabled_when_not_configured():
+def test_agent_disabled_when_not_configured(client):
     """Test agent endpoint returns 503 when OpenRouter disabled."""
     with patch("app.routers.agent.settings") as mock_settings:
         mock_settings.OPENROUTER_ENABLED = False
@@ -29,7 +33,7 @@ def test_agent_disabled_when_not_configured():
         assert "disabled" in response.json()["detail"].lower()
 
 
-def test_agent_missing_api_key():
+def test_agent_missing_api_key(client):
     """Test agent endpoint returns 503 when API key missing."""
     with patch("app.routers.agent.settings") as mock_settings:
         mock_settings.OPENROUTER_ENABLED = True
@@ -45,7 +49,7 @@ def test_agent_missing_api_key():
         assert response.status_code == 503
 
 
-def test_agent_missing_message():
+def test_agent_missing_message(client):
     """Test agent endpoint validates message."""
     response = client.post(
         "/api/agent/chat",
@@ -55,7 +59,7 @@ def test_agent_missing_message():
     assert response.status_code == 422  # Validation error
 
 
-def test_agent_invalid_year():
+def test_agent_invalid_year(client):
     """Test agent endpoint validates year."""
     response = client.post(
         "/api/agent/chat",

@@ -17,6 +17,23 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "openrouter/auto"
 
+    # Chat LLM Configuration
+    CHAT_PRIMARY_LLM: str = "openrouter/auto"
+    CHAT_FALLBACK_LLM: str = ""
+    CHAT_ENHANCEMENT_LLM: str = ""
+    CHAT_JUDGE_LLM: str = ""
+
+    # Chat Features
+    CHAT_USE_FALLBACK: bool = True
+    CHAT_USE_ENHANCEMENT: bool = False
+    CHAT_USE_JUDGE: bool = False
+
+    # Chat Parameters
+    CHAT_TEMPERATURE: float = 0.7
+    CHAT_TOP_P: float = 0.9
+    CHAT_MAX_TOKENS: int = 2048
+    CHAT_TIMEOUT_MS: int = 30000  # milliseconds
+
     class Config:
         env_file = ".env"
         case_sensitive = True
