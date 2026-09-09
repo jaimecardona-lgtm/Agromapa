@@ -14,7 +14,7 @@ class TestUPRAGeoClient:
         client = UPRAGeoClient()
         metadata = await client._get_layer_metadata(8)
         assert metadata
-        assert "objectIdField" in metadata or "objectIdField" in str(metadata).upper()
+        assert "objectIdField" in metadata or "objectid" in str(metadata).lower()
 
     @pytest.mark.asyncio
     async def test_get_object_ids(self):

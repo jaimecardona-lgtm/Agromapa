@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { GeoJsonObject, Point } from 'geojson';
 
 // Use same origin in production, localhost proxy in development
 const apiBase = import.meta.env.VITE_API_BASE_URL || '';
@@ -25,25 +26,30 @@ export interface GeoUnit {
   level: string;
   dane_code: string;
   name: string;
-  geojson: GeoJSON;
-  centroid_geojson: GeoJSON;
+  geojson: GeoJsonObject | null;
+  centroid_geojson: Point | null;
   parent_id?: string;
   parent_name?: string;
+  attributes?: Record<string, unknown>;
 }
 
-export interface GeoJSON {
-  type: string;
-  coordinates: number[] | number[][] | number[][][];
-}
-
-export interface AgriculturalStat {
+export interface AgriculturalCrop {
   crop_name: string;
+  crop_code?: string;
   crop_group?: string;
+  crop_subgroup?: string;
+  crop_cycle?: string;
+  crop_disaggregation?: string;
+  period?: string;
+  crop_physical_state?: string;
+  crop_scientific_name?: string;
   area_planted_ha?: number;
   area_harvested_ha?: number;
   production_tons?: number;
   yield_t_ha?: number;
 }
+
+export type AgriculturalStat = AgriculturalCrop;
 
 export interface AgriculturalData {
   municipality: {
@@ -55,20 +61,31 @@ export interface AgriculturalData {
     id: string;
     name: string;
   };
-  crops: AgriculturalStat[];
+  crops: AgriculturalCrop[];
   total_area_planted_ha?: number;
+  total_area_harvested_ha?: number;
   total_production_tons?: number;
+  average_yield_t_ha?: number;
+}
+
+export interface FarmCrop {
+  id: string;
+  crop_name: string;
+  area_hectares?: number;
+  expected_harvest_at?: string;
 }
 
 export interface Farm {
   id: string;
   name: string;
-  municipality_name: string;
+  municipality_name?: string;
   latitude: number;
   longitude: number;
-  geojson: GeoJSON;
+  geojson?: GeoJsonObject | null;
   description?: string;
   verified: boolean;
+  producer_name?: string;
+  crops?: FarmCrop[];
 }
 
 export const api = {
@@ -76,17 +93,20 @@ export const api = {
     check: () => apiClient.get<HealthStatus>('/api/health'),
   },
   territories: {
-    getDepartments: () => apiClient.get<{ count: number; data: GeoUnit[] }>('/api/territories/departments'),
+    getDepartments: () =>
+      apiClient.get<{ count: number; data: GeoUnit[] }>('/api/territories/departments'),
     getMunicipalities: (departmentCode: string) =>
       apiClient.get<{ count: number; data: GeoUnit[] }>(
         `/api/territories/departments/${departmentCode}/municipalities`,
       ),
     getMunicipality: (departmentCode: string, municipalityCode: string) =>
-      apiClient.get<{ data: GeoUnit }>(`/api/territories/departments/${departmentCode}/municipalities/${municipalityCode}`),
+      apiClient.get<{ data: GeoUnit }>(
+        `/api/territories/departments/${departmentCode}/municipalities/${municipalityCode}`,
+      ),
   },
   agriculture: {
     getMunicipality: (municipalityCode: string, year: number = 2024) =>
-      apiClient.get<{ data: AgriculturalData | null }>(
+      apiClient.get<{ data: AgriculturalData | null; message?: string }>(
         `/api/agriculture/municipalities/${municipalityCode}?year=${year}`,
       ),
   },
