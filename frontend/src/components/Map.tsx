@@ -187,6 +187,10 @@ export function Map({
   const colombiaCenter: [number, number] = [4.5, -74.5];
   const defaultZoom = 6;
 
+  // Defensive: ensure arrays are valid
+  const safeFeatures = Array.isArray(territorialFeatures) ? territorialFeatures : [];
+  const safeFarms = Array.isArray(farms) ? farms : [];
+
   // Prepare grouped crops for summary marker
   const groupedCrops = useMemo(() => {
     if (!agriculturalData?.crops) return [];
@@ -290,7 +294,7 @@ export function Map({
         />
 
         <MapController
-          features={territorialFeatures}
+          features={safeFeatures}
           selectedMunicipality={selectedMunicipality}
           geometryPending={geometryPending}
         />
@@ -298,7 +302,7 @@ export function Map({
         {/* ============================================================ */}
         {/* CAPA A: TERRITORIO                                           */}
         {/* ============================================================ */}
-        {territorialFeatures.map((feature) => {
+        {safeFeatures.map((feature) => {
           if (!feature.geojson) return null;
           const isSelected = selectedMunicipality?.dane_code === feature.dane_code;
           return (
@@ -316,9 +320,9 @@ export function Map({
           );
         })}
 
-        {/* Selected municipality polygon layer if not already in territorialFeatures */}
+        {/* Selected municipality polygon layer if not already in safeFeatures */}
         {selectedMunicipality?.geojson &&
-          !territorialFeatures.some((f) => f.dane_code === selectedMunicipality.dane_code) && (
+          !safeFeatures.some((f) => f.dane_code === selectedMunicipality.dane_code) && (
             <GeoJSON
               key={`selected-mun-${selectedMunicipality.dane_code}`}
               data={selectedMunicipality.geojson}
@@ -384,9 +388,8 @@ export function Map({
         {/* ============================================================ */}
         {/* CAPA C: FINCAS REGISTRADAS EN AGROMAPA                       */}
         {/* ============================================================ */}
-        {farms &&
-          farms.length > 0 &&
-          farms.map((farm) => {
+        {safeFarms.length > 0 &&
+          safeFarms.map((farm) => {
             if (!farm.latitude || !farm.longitude) return null;
             return (
               <Marker key={farm.id} position={[farm.latitude, farm.longitude]} icon={farmIcon}>

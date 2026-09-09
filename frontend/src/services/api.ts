@@ -88,6 +88,24 @@ export interface Farm {
   crops?: FarmCrop[];
 }
 
+export interface AgentContext {
+  department_code?: string | null;
+  municipality_code?: string | null;
+  year?: number;
+}
+
+export interface AgentChatRequest {
+  message: string;
+  context?: AgentContext;
+}
+
+export interface AgentChatResponse {
+  answer: string;
+  sources: string[];
+  tools_used: string[];
+  context: AgentContext;
+}
+
 export const api = {
   health: {
     check: () => apiClient.get<HealthStatus>('/api/health'),
@@ -113,5 +131,9 @@ export const api = {
   farms: {
     getByMunicipality: (municipalityCode: string) =>
       apiClient.get<{ count: number; data: Farm[] }>(`/api/farms/municipalities/${municipalityCode}`),
+  },
+  agent: {
+    chat: (request: AgentChatRequest) =>
+      apiClient.post<AgentChatResponse>('/api/agent/chat', request),
   },
 };

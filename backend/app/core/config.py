@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     OPENROUTER_ENABLED: bool = False
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "openrouter/auto"
 
     class Config:
         env_file = ".env"

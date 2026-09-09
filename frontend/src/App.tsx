@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { api, GeoUnit, AgriculturalData, Farm, HealthStatus, AgriculturalCrop } from '@/services/api';
 import { Map, groupCrops, getCropEmoji, GroupedCrop } from '@/components/Map';
 import { StatusPanel } from '@/components/StatusPanel';
+import { AgentPanel } from '@/components/AgentPanel';
 import './App.css';
 
 type NavigationLevel = 'country' | 'department' | 'municipality';
@@ -20,6 +21,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [munSearchFilter, setMunSearchFilter] = useState('');
   const [expandedCrops, setExpandedCrops] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'info' | 'agent'>('info');
 
   // Check health on mount
   useEffect(() => {
@@ -263,35 +265,54 @@ function App() {
 
           {/* Side Panel */}
           <aside className="side-panel">
-            {/* 1. MUNICIPALITY SELECTED: EVA & FARMS */}
+            {/* 1. MUNICIPALITY SELECTED: TABS */}
             {selectedMunicipality && (
               <>
-                {/* Pending Geometry Warning Banner */}
-                {isGeometryPending && (
-                  <div className="notice-banner warning">
-                    <div className="notice-icon">⚠️</div>
-                    <div className="notice-text">
-                      <strong>Geometría oficial pendiente de integración</strong>
-                      <p>
-                        El municipio {selectedMunicipality.name} (DANE {selectedMunicipality.dane_code})
-                        no cuenta con polígono cartográfico oficial en la fuente UPRA. Los datos
-                        estadísticos agrícolas se vinculan por código DANE oficial.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                {/* Tab Navigation */}
+                <div className="panel-tabs">
+                  <button
+                    className={`tab-btn ${activeTab === 'info' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('info')}
+                  >
+                    📊 Información
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'agent' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('agent')}
+                  >
+                    🤖 Agente
+                  </button>
+                </div>
 
-                {/* Agricultural Panel (EVA 2024) */}
-                <section className="panel-section">
-                  <div className="section-header">
-                    <h3>🌾 Información Agrícola</h3>
-                    <span className="source-tag">EVA 2024</span>
-                  </div>
+                {/* TAB: INFORMACIÓN */}
+                {activeTab === 'info' && (
+                  <>
+                    {/* Pending Geometry Warning Banner */}
+                    {isGeometryPending && (
+                      <div className="notice-banner warning">
+                        <div className="notice-icon">⚠️</div>
+                        <div className="notice-text">
+                          <strong>Geometría oficial pendiente de integración</strong>
+                          <p>
+                            El municipio {selectedMunicipality.name} (DANE {selectedMunicipality.dane_code})
+                            no cuenta con polígono cartográfico oficial en la fuente UPRA. Los datos
+                            estadísticos agrícolas se vinculan por código DANE oficial.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
-                  {dataLoading ? (
-                    <div className="panel-loading">Cargando estadísticas EVA...</div>
-                  ) : agriculturalData ? (
-                    <div className="agriculture-panel">
+                    {/* Agricultural Panel (EVA 2024) */}
+                    <section className="panel-section">
+                      <div className="section-header">
+                        <h3>🌾 Información Agrícola</h3>
+                        <span className="source-tag">EVA 2024</span>
+                      </div>
+
+                      {dataLoading ? (
+                        <div className="panel-loading">Cargando estadísticas EVA...</div>
+                      ) : agriculturalData ? (
+                        <div className="agriculture-panel">
                       <div className="ag-header">
                         <h4>{agriculturalData.municipality.name}</h4>
                         <p className="ag-code">Código DANE: {agriculturalData.municipality.dane_code}</p>
@@ -469,6 +490,25 @@ function App() {
                     </div>
                   )}
                 </section>
+
+                    {/* 3. SYSTEM STATUS - IN INFO TAB */}
+                    <section className="panel-section status-section">
+                      <h3>⚙️ Estado del Sistema</h3>
+                      <StatusPanel health={health} loading={loading} />
+                    </section>
+                  </>
+                )}
+
+                {/* TAB: AGENTE */}
+                {activeTab === 'agent' && (
+                  <div className="agent-panel-wrapper">
+                    <AgentPanel
+                      departmentCode={selectedDepartment?.dane_code}
+                      municipalityCode={selectedMunicipality.dane_code}
+                      municipalityName={selectedMunicipality.name}
+                    />
+                  </div>
+                )}
               </>
             )}
 
@@ -523,11 +563,6 @@ function App() {
               </section>
             )}
 
-            {/* 3. SYSTEM STATUS */}
-            <section className="panel-section status-section">
-              <h3>⚙️ Estado del Sistema</h3>
-              <StatusPanel health={health} loading={loading} />
-            </section>
           </aside>
         </div>
       </main>
