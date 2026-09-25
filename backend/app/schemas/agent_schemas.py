@@ -1,6 +1,6 @@
 """Schemas for agent endpoint."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -13,11 +13,19 @@ class AgentContext(BaseModel):
     year: int = Field(default=2024, ge=2000, le=2100)
 
 
+class ChatHistoryMessage(BaseModel):
+    """Chat history message - only user/assistant allowed."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=5000)
+
+
 class AgentChatRequest(BaseModel):
     """Request for agent chat endpoint."""
 
     message: str = Field(..., min_length=1, max_length=1000)
     context: AgentContext = Field(default_factory=lambda: AgentContext())
+    history: list[ChatHistoryMessage] = Field(default_factory=list, max_length=8)
 
 
 class AgentChatResponse(BaseModel):

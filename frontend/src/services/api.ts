@@ -94,9 +94,15 @@ export interface AgentContext {
   year?: number;
 }
 
+export interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface AgentChatRequest {
   message: string;
   context?: AgentContext;
+  history?: ChatHistoryMessage[];
 }
 
 export interface AgentChatResponse {

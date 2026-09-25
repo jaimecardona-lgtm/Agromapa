@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AgroMapa Colombia - App Layout & Components Styling
+   Raíces Conectadas - App Layout & Components Styling
    ========================================================================== */
 
 * {
@@ -36,20 +36,48 @@ html, body, #root {
   align-items: center;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+
+.brand-logo-wrapper {
+  background: white;
+  border-radius: 12px;
+  padding: 5px 8px;
+  flex-shrink: 0;
+}
+
+.brand-logo {
+  width: auto;
+  height: 62px;
+  object-fit: contain;
+}
+
+.header-title {
+  flex: 1;
+}
+
 .header-title h1 {
   font-size: 1.5rem;
   font-weight: 800;
   margin: 0;
   letter-spacing: -0.5px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
-.header-title p {
+.header-tagline {
+  margin: 4px 0 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.header-subtitle {
   margin: 2px 0 0 0;
-  font-size: 0.85rem;
-  color: #c7d2fe;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .header-badge {
@@ -721,6 +749,12 @@ html, body, #root {
   margin: 0;
 }
 
+.footer-credits {
+  color: #64748b;
+  font-size: 0.7rem;
+  margin-top: 2px !important;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .content-container {
@@ -739,6 +773,20 @@ html, body, #root {
     border-top: 1px solid #e2e8f0;
     max-height: none;
     height: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .brand-logo {
+    height: 48px;
+  }
+
+  .header-title h1 {
+    font-size: 1.2rem;
+  }
+
+  .header-tagline {
+    font-size: 0.7rem;
   }
 }
 

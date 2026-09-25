@@ -78,24 +78,34 @@ class OpenRouterClient:
 
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
+            try:
+                error_body = e.response.json()
+            except Exception:
+                error_body = e.response.text[:500]
 
             # NO fallback for auth/payment/validation errors
             if status in (401, 402, 403, 422):
-                logger.error(f"Model {model} client error {status}. No fallback.")
+                logger.error(
+                    f"Model {model} auth/config error {status}. No fallback. Error: {error_body}"
+                )
                 raise
 
             # NO fallback for generic 5xx errors (except availability issues)
             if status >= 500 and status not in (502, 503, 504):
-                logger.error(f"Model {model} server error {status}. No fallback.")
+                logger.error(
+                    f"Model {model} server error {status}. No fallback. Error: {error_body}"
+                )
                 raise
 
             # YES fallback for: model not found, rate limits, service unavailable
             if status in (404, 429, 502, 503, 504):
-                logger.warning(f"Model {model} error {status}. Attempting fallback.")
+                logger.warning(
+                    f"Model {model} error {status}. Fallback eligible. Error: {error_body}"
+                )
                 if self.use_fallback and self.fallback_model and model != self.fallback_model:
                     logger.info(
                         f"Primary model {model} failed with {status}. "
-                        f"Trying fallback model: {self.fallback_model}"
+                        f"Attempting fallback: {self.fallback_model}"
                     )
                     return await self.chat_completion(
                         messages=messages,
@@ -107,7 +117,8 @@ class OpenRouterClient:
                         max_tokens=max_tokens,
                     )
                 logger.error(
-                    f"Model {model} error {status} and no fallback configured or fallback already tried."
+                    f"Model {model} error {status}: no fallback configured. "
+                    f"Enable CHAT_USE_FALLBACK and set CHAT_FALLBACK_LLM."
                 )
             raise
 

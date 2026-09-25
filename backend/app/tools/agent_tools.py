@@ -1,4 +1,4 @@
-"""Tools for the AgroMapa master agent."""
+"""Tools for the Raíces Conectadas master agent."""
 
 import logging
 
@@ -137,7 +137,7 @@ AGENT_TOOLS_SCHEMA = [
         "type": "function",
         "function": {
             "name": "get_municipality_farms",
-            "description": "Get farms currently registered in AgroMapa for a municipality",
+            "description": "Get farms currently registered in Raíces Conectadas for a municipality",
             "parameters": {
                 "type": "object",
                 "properties": {

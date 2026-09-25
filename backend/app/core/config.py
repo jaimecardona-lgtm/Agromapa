@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "AgroMapa Colombia API"
+    APP_NAME: str = "Raíces Conectadas API"
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
     API_V1_PREFIX: str = "/api"
@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     CHAT_USE_JUDGE: bool = False
 
     # Chat Parameters
-    CHAT_TEMPERATURE: float = 0.7
-    CHAT_TOP_P: float = 0.9
-    CHAT_MAX_TOKENS: int = 2048
-    CHAT_TIMEOUT_MS: int = 30000  # milliseconds
+    CHAT_TEMPERATURE: float = 0.2
+    CHAT_TOP_P: float = 0.8
+    CHAT_MAX_TOKENS: int = 900
+    CHAT_TIMEOUT_MS: int = 45000  # milliseconds
 
     class Config:
         env_file = ".env"

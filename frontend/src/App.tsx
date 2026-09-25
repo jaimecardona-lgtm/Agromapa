@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { api, GeoUnit, AgriculturalData, Farm, HealthStatus, AgriculturalCrop } from '@/services/api';
 import { Map, groupCrops, getCropEmoji, GroupedCrop } from '@/components/Map';
 import { StatusPanel } from '@/components/StatusPanel';
@@ -23,6 +23,74 @@ function App() {
   const [expandedCrops, setExpandedCrops] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'info' | 'agent'>('info');
 
+  // Update URL when navigation state changes
+  const updateURL = useCallback((dept?: string, mun?: string, tab?: 'info' | 'agent') => {
+    const params = new URLSearchParams();
+    if (dept) params.set('department', dept);
+    if (mun) params.set('municipality', mun);
+    if (tab && tab !== 'info') params.set('tab', tab);
+
+    const queryString = params.toString();
+    const newURL = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+    window.history.pushState({ department: dept, municipality: mun, tab }, '', newURL);
+  }, []);
+
+  // Restore state from URL
+  const restoreFromURL = useCallback(async (depts: GeoUnit[]) => {
+    const params = new URLSearchParams(window.location.search);
+    const deptCode = params.get('department');
+    const munCode = params.get('municipality');
+    const tabParam = params.get('tab') as 'info' | 'agent' | null;
+
+    if (tabParam && tabParam === 'agent') {
+      setActiveTab('agent');
+    }
+
+    if (!deptCode) {
+      return;
+    }
+
+    // Find selected department
+    const dept = depts.find((d) => d.dane_code === deptCode);
+    if (!dept) {
+      return;
+    }
+
+    setSelectedDepartment(dept);
+    setCurrentLevel('department');
+
+    try {
+      // Load municipalities
+      const munRes = await api.territories.getMunicipalities(deptCode);
+      if (munRes.data.data) {
+        setMunicipalities(munRes.data.data);
+
+        // If municipality is specified in URL, restore it
+        if (munCode) {
+          const mun = munRes.data.data.find((m) => m.dane_code === munCode);
+          if (mun) {
+            setSelectedMunicipality(mun);
+            setCurrentLevel('municipality');
+
+            // Load agricultural and farms data in parallel
+            try {
+              const [agRes, farmsRes] = await Promise.all([
+                api.agriculture.getMunicipality(munCode, 2024),
+                api.farms.getByMunicipality(munCode),
+              ]);
+              setAgriculturalData(agRes.data.data || null);
+              setFarms(farmsRes.data.data || []);
+            } catch (err) {
+              console.error('Failed to load municipality data:', err);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore from URL:', err);
+    }
+  }, []);
+
   // Check health on mount
   useEffect(() => {
     const checkHealth = async () => {
@@ -36,15 +104,17 @@ function App() {
     checkHealth();
   }, []);
 
-  // Load departments on mount
+  // Load departments and restore URL state
   useEffect(() => {
-    const loadDepartments = async () => {
+    const loadAndRestore = async () => {
       setLoading(true);
       setError(null);
       try {
         const res = await api.territories.getDepartments();
         if (res.data.data && res.data.data.length > 0) {
           setDepartments(res.data.data);
+          // Try to restore from URL
+          await restoreFromURL(res.data.data);
         } else {
           setError('No geographic data found. Run: python -m app.jobs.sync_upra_geo');
         }
@@ -55,8 +125,46 @@ function App() {
         setLoading(false);
       }
     };
-    loadDepartments();
-  }, []);
+    loadAndRestore();
+  }, [restoreFromURL]);
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as { department?: string; municipality?: string; tab?: 'info' | 'agent' } | null;
+
+      if (!state || (!state.department && !state.municipality)) {
+        // Back to country level
+        setSelectedDepartment(null);
+        setSelectedMunicipality(null);
+        setCurrentLevel('country');
+        setActiveTab('info');
+        return;
+      }
+
+      // Restore from state object
+      const dept = departments.find((d) => d.dane_code === state.department);
+      if (dept) {
+        setSelectedDepartment(dept);
+        setCurrentLevel('department');
+
+        if (state.municipality) {
+          const mun = municipalities.find((m) => m.dane_code === state.municipality);
+          if (mun) {
+            setSelectedMunicipality(mun);
+            setCurrentLevel('municipality');
+          }
+        }
+      }
+
+      if (state.tab) {
+        setActiveTab(state.tab);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [departments, municipalities]);
 
   const handleDepartmentClick = async (dept: GeoUnit) => {
     setSelectedDepartment(dept);
@@ -65,8 +173,12 @@ function App() {
     setFarms([]);
     setCurrentLevel('department');
     setMunSearchFilter('');
+    setActiveTab('info');
     setLoading(true);
     setError(null);
+
+    // Update URL
+    updateURL(dept.dane_code, undefined, 'info');
 
     try {
       const res = await api.territories.getMunicipalities(dept.dane_code);
@@ -86,14 +198,20 @@ function App() {
     setCurrentLevel('municipality');
     setDataLoading(true);
     setExpandedCrops({});
+    setActiveTab('info');
+
+    // Update URL
+    if (selectedDepartment) {
+      updateURL(selectedDepartment.dane_code, mun.dane_code, 'info');
+    }
 
     try {
-      // 1. Fetch real EVA agricultural data (independent of farms)
-      const agRes = await api.agriculture.getMunicipality(mun.dane_code, 2024);
+      // Fetch real EVA agricultural data and farms in parallel
+      const [agRes, farmsRes] = await Promise.all([
+        api.agriculture.getMunicipality(mun.dane_code, 2024),
+        api.farms.getByMunicipality(mun.dane_code),
+      ]);
       setAgriculturalData(agRes.data.data || null);
-
-      // 2. Fetch farms (empty farms does NOT break or hide map/EVA)
-      const farmsRes = await api.farms.getByMunicipality(mun.dane_code);
       setFarms(farmsRes.data.data || []);
     } catch (err) {
       console.error('Failed to load municipality data:', err);
@@ -109,11 +227,37 @@ function App() {
       setAgriculturalData(null);
       setFarms([]);
       setExpandedCrops({});
+      setActiveTab('info');
+      // Update URL to department only
+      if (selectedDepartment) {
+        updateURL(selectedDepartment.dane_code, undefined, 'info');
+      }
     } else if (currentLevel === 'department') {
       setCurrentLevel('country');
       setSelectedDepartment(null);
       setMunicipalities([]);
       setMunSearchFilter('');
+      setActiveTab('info');
+      // Update URL to root
+      updateURL(undefined, undefined, 'info');
+    }
+  };
+
+  const handleTabChange = (tab: 'info' | 'agent') => {
+    setActiveTab(tab);
+    // Update URL with new tab (use replaceState to avoid filling history)
+    const params = new URLSearchParams(window.location.search);
+    if (selectedMunicipality && selectedDepartment) {
+      params.set('department', selectedDepartment.dane_code);
+      params.set('municipality', selectedMunicipality.dane_code);
+      if (tab !== 'info') {
+        params.set('tab', tab);
+      } else {
+        params.delete('tab');
+      }
+      const queryString = params.toString();
+      const newURL = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+      window.history.replaceState({ department: selectedDepartment.dane_code, municipality: selectedMunicipality.dane_code, tab }, '', newURL);
     }
   };
 
@@ -175,9 +319,19 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <div className="header-title">
-            <h1>🗺️ AgroMapa Colombia</h1>
-            <p>Explorador territorial agroproductivo oficial — UPRA & EVA 2024</p>
+          <div className="brand-lockup">
+            <div className="brand-logo-wrapper">
+              <img
+                src="/brand/raices-conectadas-logo.png"
+                alt="Raíces Conectadas"
+                className="brand-logo"
+              />
+            </div>
+            <div className="header-title">
+              <h1>Raíces Conectadas</h1>
+              <p className="header-tagline">Biodiversidad • Territorio • Bioeconomía</p>
+              <p className="header-subtitle">Explorador territorial y agroproductivo — UPRA & EVA 2024</p>
+            </div>
           </div>
           {health && (
             <div className="header-badge">
@@ -272,13 +426,13 @@ function App() {
                 <div className="panel-tabs">
                   <button
                     className={`tab-btn ${activeTab === 'info' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('info')}
+                    onClick={() => handleTabChange('info')}
                   >
                     📊 Información
                   </button>
                   <button
                     className={`tab-btn ${activeTab === 'agent' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('agent')}
+                    onClick={() => handleTabChange('agent')}
                   >
                     🤖 Agente
                   </button>
@@ -457,7 +611,7 @@ function App() {
                   {farms && farms.length > 0 ? (
                     <div className="farms-list">
                       <p className="farms-summary-text">
-                        {farms.length} finca(s) registradas en AgroMapa para este municipio.
+                        {farms.length} finca(s) registradas en Raíces Conectadas para este municipio.
                       </p>
                       {farms.map((farm) => (
                         <div key={farm.id} className="farm-card">
@@ -483,7 +637,7 @@ function App() {
                     </div>
                   ) : (
                     <div className="empty-farms-box">
-                      <p className="no-data">No hay fincas registradas en AgroMapa para este municipio.</p>
+                      <p className="no-data">No hay fincas registradas en Raíces Conectadas para este municipio.</p>
                       <span className="empty-farms-hint">
                         La ausencia de fincas no afecta los datos agrícolas oficiales de EVA.
                       </span>
@@ -499,16 +653,19 @@ function App() {
                   </>
                 )}
 
-                {/* TAB: AGENTE */}
-                {activeTab === 'agent' && (
-                  <div className="agent-panel-wrapper">
-                    <AgentPanel
-                      departmentCode={selectedDepartment?.dane_code}
-                      municipalityCode={selectedMunicipality.dane_code}
-                      municipalityName={selectedMunicipality.name}
-                    />
-                  </div>
-                )}
+                {/* TAB: AGENTE - Always mounted, visibility controlled */}
+                <div
+                  className={`agent-panel-wrapper ${activeTab === 'agent' ? 'active' : 'hidden'}`}
+                  style={{
+                    display: activeTab === 'agent' ? 'flex' : 'none',
+                  }}
+                >
+                  <AgentPanel
+                    departmentCode={selectedDepartment?.dane_code}
+                    municipalityCode={selectedMunicipality.dane_code}
+                    municipalityName={selectedMunicipality.name}
+                  />
+                </div>
               </>
             )}
 
@@ -568,7 +725,8 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>AgroMapa Colombia © 2026 — Datos oficiales UPRA & Evaluaciones Agropecuarias Municipales (EVA 2024)</p>
+        <p>Raíces Conectadas © 2026 — Biodiversidad • Territorio • Bioeconomía</p>
+        <p className="footer-credits">Datos oficiales UPRA & Evaluaciones Agropecuarias Municipales (EVA 2024)</p>
       </footer>
     </div>
   );

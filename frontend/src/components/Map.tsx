@@ -398,7 +398,7 @@ export function Map({
                     <h4>🏡 {farm.name}</h4>
                     {farm.producer_name && <p><strong>Productor:</strong> {farm.producer_name}</p>}
                     {farm.description && <p>{farm.description}</p>}
-                    <p className="farm-source-badge">Finca registrada en AgroMapa</p>
+                    <p className="farm-source-badge">Finca registrada en Raíces Conectadas</p>
                   </div>
                 </Popup>
               </Marker>

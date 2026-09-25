@@ -10,6 +10,11 @@ interface Message {
   timestamp: Date;
 }
 
+interface StoredMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface AgentPanelProps {
   municipalityCode?: string | null;
   municipalityName?: string | null;
@@ -23,6 +28,43 @@ const SUGGESTIONS = [
   '¿Hay fincas registradas aquí?',
 ];
 
+const getSessionStorageKey = (municipalityCode: string | null | undefined): string => {
+  return municipalityCode ? `raices-chat-${municipalityCode}` : 'raices-chat-none';
+};
+
+const loadChatFromStorage = (municipalityCode: string | null | undefined): Message[] => {
+  if (!municipalityCode) return [];
+  try {
+    const key = getSessionStorageKey(municipalityCode);
+    const stored = sessionStorage.getItem(key);
+    if (stored) {
+      const parsed = JSON.parse(stored) as StoredMessage[];
+      return parsed.map((msg, idx) => ({
+        id: `stored-${idx}`,
+        role: msg.role,
+        content: msg.content,
+        timestamp: new Date(),
+      }));
+    }
+  } catch (e) {
+    console.error('Failed to load chat from storage:', e);
+  }
+  return [];
+};
+
+const saveChatToStorage = (municipalityCode: string | null | undefined, messages: Message[]): void => {
+  if (!municipalityCode) return;
+  try {
+    const key = getSessionStorageKey(municipalityCode);
+    const toStore = messages
+      .filter(m => m.role !== 'assistant' || !m.id.startsWith('error-'))
+      .map(m => ({ role: m.role, content: m.content }));
+    sessionStorage.setItem(key, JSON.stringify(toStore));
+  } catch (e) {
+    console.error('Failed to save chat to storage:', e);
+  }
+};
+
 export function AgentPanel({ municipalityCode, municipalityName, departmentCode }: AgentPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -31,17 +73,29 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
   const [agentAvailable, setAgentAvailable] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize with welcome message
+  // Load or initialize chat on municipalityCode change
   useEffect(() => {
-    const welcomeMessage: Message = {
-      id: '0',
-      role: 'assistant',
-      content: municipalityName
-        ? `Hola. Soy el Agente AgroMapa. Puedo ayudarte a consultar información territorial, estadísticas EVA 2024 y fincas registradas. Actualmente estás consultando ${municipalityName}.`
-        : `Hola. Soy el Agente AgroMapa. Puedo ayudarte a consultar información territorial, estadísticas EVA 2024 y fincas registradas.`,
-      timestamp: new Date(),
-    };
-    setMessages([welcomeMessage]);
+    if (!municipalityCode) {
+      setMessages([]);
+      return;
+    }
+
+    // Try to restore from storage
+    const stored = loadChatFromStorage(municipalityCode);
+    if (stored.length > 0) {
+      setMessages(stored);
+    } else {
+      // First time for this municipality - show welcome
+      const welcomeMessage: Message = {
+        id: '0',
+        role: 'assistant',
+        content: municipalityName
+          ? `Hola. Soy el Agente de Raíces Conectadas. Puedo ayudarte a consultar información territorial, estadísticas EVA 2024 y fincas registradas. Actualmente estás consultando ${municipalityName}.`
+          : `Hola. Soy el Agente de Raíces Conectadas. Puedo ayudarte a consultar información territorial, estadísticas EVA 2024 y fincas registradas.`,
+        timestamp: new Date(),
+      };
+      setMessages([welcomeMessage]);
+    }
   }, [municipalityCode, municipalityName]);
 
   // Auto-scroll to latest message
@@ -66,12 +120,19 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setLoading(true);
     setError(null);
 
     try {
+      // Build history from previous messages (exclude errors, include only user/assistant)
+      const history = newMessages
+        .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.id.startsWith('error-')))
+        .slice(0, -1)
+        .map(m => ({ role: m.role, content: m.content }));
+
       const response = await api.agent.chat({
         message: messageText,
         context: {
@@ -79,6 +140,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
           municipality_code: municipalityCode,
           year: 2024,
         },
+        history,
       });
 
       const assistantMessage: Message = {
@@ -89,22 +151,56 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const finalMessages = [...newMessages, assistantMessage];
+      setMessages(finalMessages);
+      saveChatToStorage(municipalityCode, finalMessages);
+      setError(null);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al conectar con el agente';
+      let displayError = 'Hubo un error procesando la consulta.';
+      let status = 500;
 
-      if (errorMsg.includes('503') || errorMsg.includes('disabled')) {
-        setAgentAvailable(false);
-        setError('El Agente AgroMapa aún no está habilitado en este entorno.');
-      } else {
-        setError('No pude completar la consulta en este momento. Intenta de nuevo.');
+      // Extract error details from Axios error
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as Record<string, unknown>;
+        const response = axiosErr.response as Record<string, unknown> | undefined;
+        status = (response?.status as number) || 500;
+        const detail = (response?.data as Record<string, unknown>)?.detail as string | undefined;
+
+        // Map HTTP status to user-friendly message
+        switch (status) {
+          case 429:
+            displayError = 'El servicio de IA alcanzó temporalmente su límite de solicitudes. Intenta en unos momentos.';
+            break;
+          case 502:
+          case 503:
+            displayError = 'El asistente de IA está temporalmente no disponible. Por favor intenta de nuevo.';
+            break;
+          case 504:
+            displayError = 'El agente tardó demasiado en responder. Intenta nuevamente.';
+            break;
+          case 500:
+            displayError = 'Hubo un error procesando la consulta. Intenta de nuevo.';
+            break;
+          default:
+            displayError = detail || displayError;
+        }
+
+        // Special case: agent not available
+        if (status === 503 && detail && detail.includes('OpenRouter')) {
+          setAgentAvailable(false);
+          displayError = 'El Agente de Raíces Conectadas aún no está habilitado en este entorno.';
+        }
+      } else if (err instanceof Error) {
+        displayError = err.message || displayError;
       }
 
-      // Add error message to chat
+      setError(displayError);
+
+      // Add error message to chat (not saved to storage)
       const errorSystemMessage: Message = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: error || 'Hubo un error procesando tu pregunta.',
+        content: displayError,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorSystemMessage]);
@@ -124,7 +220,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
     return (
       <div className="agent-panel unavailable">
         <div className="agent-unavailable-box">
-          <p>⚠️ El Agente AgroMapa aún no está habilitado</p>
+          <p>⚠️ El Agente de Raíces Conectadas aún no está habilitado</p>
           <p className="small">
             Configura OpenRouter en el backend para activar el asistente inteligente.
           </p>
@@ -183,7 +279,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
             <div className="message message-assistant loading">
               <div className="message-bubble">
                 <span className="spinner"></span>
-                <span>AgroMapa está consultando los datos...</span>
+                <span>Raíces Conectadas está consultando los datos...</span>
               </div>
             </div>
           )}
@@ -202,7 +298,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
           onKeyPress={handleKeyPress}
           placeholder={
             municipalityCode
-              ? 'Pregúntale a AgroMapa (Shift+Enter para nueva línea)...'
+              ? 'Pregúntale a Raíces Conectadas (Shift+Enter para nueva línea)...'
               : 'Selecciona un municipio primero'
           }
           disabled={loading || !municipalityCode}

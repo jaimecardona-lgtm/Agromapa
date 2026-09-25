@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Plataforma geoespacial agroproductiva",
+    description="Plataforma de biodiversidad, territorio y bioeconomía con mapeo digital e inteligencia artificial",
     version="0.2.0",
     debug=settings.APP_DEBUG,
 )
@@ -42,7 +42,7 @@ logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 async def api_info():
     """API information and documentation."""
     return {
-        "message": "AgroMapa Colombia API",
+        "message": "Raíces Conectadas API",
         "version": "0.2.0",
         "docs": "/docs",
         "health": "/api/health",
