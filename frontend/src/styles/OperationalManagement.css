@@ -1,0 +1,306 @@
+.operational-management {
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  max-width: 1200px;
+  margin: 20px auto;
+}
+
+.operational-management h2 {
+  color: #2c5a2c;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.error-banner {
+  background-color: #fee;
+  color: #c00;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 4px solid #c00;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 10px 16px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #f5f5f5;
+}
+
+.tab.active {
+  background: #2c5a2c;
+  color: white;
+  border-color: #2c5a2c;
+}
+
+/* Content */
+.tab-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.section {
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.section h3 {
+  color: #2c5a2c;
+  margin-bottom: 20px;
+}
+
+.note {
+  color: #666;
+  font-style: italic;
+  padding: 12px;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+/* Forms */
+.form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 30px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.form input,
+.form select,
+.form textarea {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+  outline: none;
+  border-color: #2c5a2c;
+  box-shadow: 0 0 0 2px rgba(44, 90, 44, 0.1);
+}
+
+.form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form button {
+  padding: 10px 20px;
+  background: #2c5a2c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.form button:hover:not(:disabled) {
+  background: #1f4620;
+}
+
+.form button:disabled {
+  background: #999;
+  cursor: not-allowed;
+}
+
+/* Lists */
+.list {
+  margin-bottom: 30px;
+}
+
+.list h4 {
+  color: #333;
+  margin-bottom: 12px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.item:hover {
+  background: #f5f5f5;
+  border-color: #2c5a2c;
+}
+
+.item.selected {
+  background: #e8f5e9;
+  border-color: #2c5a2c;
+  border-width: 2px;
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-header strong {
+  color: #2c5a2c;
+  flex: 1;
+}
+
+.item-detail {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* Offers Grid */
+.offers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.offer-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.offer-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.offer-header {
+  background: #f5f5f5;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.offer-header h4 {
+  margin: 0;
+  color: #2c5a2c;
+  font-size: 16px;
+}
+
+.status {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #2c5a2c;
+  color: white;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status.sold_out {
+  background: #d9534f;
+}
+
+.status.harvested {
+  background: #5cb85c;
+}
+
+.status.inactive {
+  background: #999;
+}
+
+.offer-body {
+  padding: 12px;
+}
+
+.offer-line {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.offer-line strong {
+  color: #2c5a2c;
+  display: inline-block;
+  width: 120px;
+}
+
+.offer-source {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+  font-size: 12px;
+  color: #666;
+}
+
+.offer-source em {
+  color: #2c5a2c;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .operational-management {
+    padding: 12px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    gap: 5px;
+  }
+
+  .tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .tab-content {
+    padding: 12px;
+  }
+
+  .offers-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form {
+    gap: 8px;
+  }
+}

@@ -86,7 +86,7 @@ FRONTEND_ORIGINS=http://localhost:5173,http://localhost:3000
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=your-secret-key
 OPENROUTER_ENABLED=false
-OPENROUTER_API_KEY=
+OPENROUTER_API_KEY
 ```
 
 ## Ejecución con Docker Compose

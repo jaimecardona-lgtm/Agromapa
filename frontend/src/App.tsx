@@ -3,9 +3,13 @@ import { api, GeoUnit, AgriculturalData, Farm, HealthStatus, AgriculturalCrop } 
 import { Map, groupCrops, getCropEmoji, GroupedCrop } from '@/components/Map';
 import { StatusPanel } from '@/components/StatusPanel';
 import { AgentPanel } from '@/components/AgentPanel';
+import { OperationalManagement } from '@/components/OperationalManagement';
+import { LearnGames } from '@/components/games/LearnGames';
+import { EducationalResources } from '@/components/EducationalResources';
 import './App.css';
 
 type NavigationLevel = 'country' | 'department' | 'municipality';
+type ViewMode = 'map' | 'operational' | 'games' | 'resources';
 
 function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -22,6 +26,7 @@ function App() {
   const [munSearchFilter, setMunSearchFilter] = useState('');
   const [expandedCrops, setExpandedCrops] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'info' | 'agent'>('info');
+  const [viewMode, setViewMode] = useState<ViewMode>('map');
 
   // Update URL when navigation state changes
   const updateURL = useCallback((dept?: string, mun?: string, tab?: 'info' | 'agent') => {
@@ -395,7 +400,40 @@ function App() {
           )}
         </nav>
 
-        {/* Main Content: Map + Side Panel */}
+        {/* View Mode Toggle */}
+        <div className="view-mode-toggle">
+          <button
+            className={`view-btn ${viewMode === 'map' ? 'active' : ''}`}
+            onClick={() => setViewMode('map')}
+            title="Ver mapa territorial"
+          >
+            🗺️ Mapa
+          </button>
+          <button
+            className={`view-btn ${viewMode === 'operational' ? 'active' : ''}`}
+            onClick={() => setViewMode('operational')}
+            title="Gestionar productores, fincas y ofertas"
+          >
+            🌾 Gestión Productiva
+          </button>
+          <button
+            className={`view-btn ${viewMode === 'games' ? 'active' : ''}`}
+            onClick={() => setViewMode('games')}
+            title="Aprende jugando con minijuegos educativos"
+          >
+            🎮 Aprende Jugando
+          </button>
+          <button
+            className={`view-btn ${viewMode === 'resources' ? 'active' : ''}`}
+            onClick={() => setViewMode('resources')}
+            title="Accede a materiales educativos"
+          >
+            📚 Recursos
+          </button>
+        </div>
+
+        {/* Main Content: Map + Side Panel or Operational Management */}
+        {viewMode === 'map' ? (
         <div className="content-container">
           {/* Map Section */}
           <div className="map-section">
@@ -722,6 +760,19 @@ function App() {
 
           </aside>
         </div>
+        ) : viewMode === 'operational' ? (
+        <div className="operational-container">
+          <OperationalManagement />
+        </div>
+        ) : viewMode === 'games' ? (
+        <div className="games-container">
+          <LearnGames />
+        </div>
+        ) : viewMode === 'resources' ? (
+        <div className="resources-container">
+          <EducationalResources />
+        </div>
+        ) : null}
       </main>
 
       <footer className="app-footer">

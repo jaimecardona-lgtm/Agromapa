@@ -832,3 +832,57 @@ html, body, #root {
   display: flex;
   flex-direction: column;
 }
+
+/* View Mode Toggle */
+.view-mode-toggle {
+  display: flex;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f0f4f8;
+  border-bottom: 1px solid #e0e7ff;
+  justify-content: center;
+}
+
+.view-btn {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  color: #475569;
+}
+
+.view-btn:hover {
+  border-color: #4338ca;
+  color: #4338ca;
+  background: #f0f4f8;
+}
+
+.view-btn.active {
+  background: #4338ca;
+  color: white;
+  border-color: #4338ca;
+}
+
+/* Operational Container */
+.operational-container {
+  flex: 1;
+  overflow-y: auto;
+  background: #f9f9f9;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .view-mode-toggle {
+    padding: 8px;
+    gap: 5px;
+  }
+
+  .view-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

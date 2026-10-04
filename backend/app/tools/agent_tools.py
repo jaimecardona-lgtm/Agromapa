@@ -150,6 +150,48 @@ AGENT_TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_offers",
+            "description": "Get currently available production offers from registered farms in Raíces Conectadas (operational data, NOT historical)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "municipality_code": {
+                        "type": "string",
+                        "description": "Optional DANE code to filter by municipality",
+                    },
+                    "crop_name": {
+                        "type": "string",
+                        "description": "Optional crop name to filter by (e.g., 'coffee', 'plantain')",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_available_product",
+            "description": "Search for currently available products from farmers in a municipality or department (operational data)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_name": {
+                        "type": "string",
+                        "description": "Name of the product to search for",
+                    },
+                    "municipality_code": {
+                        "type": "string",
+                        "description": "Optional DANE code of municipality to narrow search",
+                    },
+                },
+                "required": ["product_name"],
+            },
+        },
+    },
 ]
 
 
@@ -268,6 +310,51 @@ async def execute_tool(tool_name: str, arguments: dict) -> dict:
             municipality_code = arguments.get("municipality_code")
             result = await get_municipality_farms(municipality_code)
             return {"success": True, "data": result}
+
+        elif tool_name == "get_current_offers":
+            municipality_code = arguments.get("municipality_code")
+            crop_name = arguments.get("crop_name")
+
+            try:
+                from app.services.operational_service import (
+                    get_current_offers as get_offers_service,
+                )
+
+                result = await get_offers_service(
+                    municipality_code=municipality_code,
+                    crop_name=crop_name,
+                )
+                return {
+                    "success": True,
+                    "data": result.model_dump() if hasattr(result, "model_dump") else result,
+                }
+            except Exception as e:
+                logger.error(f"Failed to get current offers: {str(e)}")
+                return {"success": False, "error": "No operational offers found"}
+
+        elif tool_name == "search_available_product":
+            product_name = arguments.get("product_name")
+            municipality_code = arguments.get("municipality_code")
+
+            try:
+                from app.services.operational_service import (
+                    get_current_offers as get_offers_service,
+                )
+
+                result = await get_offers_service(
+                    municipality_code=municipality_code,
+                    crop_name=product_name,
+                )
+                if result.count == 0:
+                    return {
+                        "success": True,
+                        "data": [],
+                        "message": f"No {product_name} currently available in registered farms. Consider checking EVA 2024 for historical agricultural capacity.",
+                    }
+                return {"success": True, "data": result.model_dump() if hasattr(result, "model_dump") else result}
+            except Exception as e:
+                logger.error(f"Failed to search product: {str(e)}")
+                return {"success": False, "error": str(e)}
 
         else:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}

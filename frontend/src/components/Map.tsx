@@ -397,7 +397,19 @@ export function Map({
                   <div className="farm-popup-content">
                     <h4>🏡 {farm.name}</h4>
                     {farm.producer_name && <p><strong>Productor:</strong> {farm.producer_name}</p>}
+                    {farm.municipality_name && <p><strong>Municipio:</strong> {farm.municipality_name}</p>}
                     {farm.description && <p>{farm.description}</p>}
+                    {farm.area_ha && <p><strong>Área:</strong> {farm.area_ha} ha</p>}
+                    {farm.crops && farm.crops.length > 0 && (
+                      <div>
+                        <p><strong>Cultivos:</strong></p>
+                        <ul style={{ margin: '4px 0', paddingLeft: '16px', fontSize: '12px' }}>
+                          {farm.crops.map((crop) => (
+                            <li key={crop.id}>{crop.crop_name} {crop.area_hectares ? `(${crop.area_hectares} ha)` : ''}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <p className="farm-source-badge">Finca registrada en Raíces Conectadas</p>
                   </div>
                 </Popup>
