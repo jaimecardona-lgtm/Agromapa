@@ -1,407 +1,168 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameShell } from '../GameShell';
 import { GameResult } from '../GameResult';
-import { FloatingText, ComboDisplay, PowerUpIndicator, FinalRound, GameMessage } from '../GameFeedback';
-import { getRandomPowerUp, POWER_UPS, PowerUpType } from '@/data/powerUps';
+import { FloatingText, ComboDisplay, EffectIndicator, FinalRound, FlashOverlay, GameMessage, ActiveEffect } from '../GameFeedback';
+import { POWER_UPS, PowerUpType } from '@/data/powerUps';
 import { setBestScore } from '@/utils/bestScores';
 import '../../styles/games/CosechasGame.css';
+import {
+  CosechasState,
+  FINAL_ROUND_MS,
+  GAME_DURATION,
+  MAGNET_RADIUS,
+  GAME_WIDTH,
+  GAME_HEIGHT,
+  SPAWN_MS,
+  SUPER_BASKET_SCALE,
+  TICK_MS,
+  clampBasket,
+  comboMultiplier,
+  createInitialState,
+  getRating,
+  isEffectActive,
+  spawnItem,
+  stepGame,
+} from './cosechasEngine';
 
-const CROPS = ['🌾', '🌽', '🥔', '🥬', '🥕'];
-const OBSTACLES = ['🪨', '💨', '🐛'];
-const GAME_DURATION = 30000;
-const BASKET_WIDTH = 60;
-const GAME_WIDTH = 400;
-const GAME_HEIGHT = 500;
+type Phase = 'start' | 'countdown' | 'playing' | 'ended';
 
-interface GameItem {
-  id: string;
-  emoji: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  type: 'crop' | 'obstacle' | 'powerup';
-  powerUpType?: PowerUpType;
-}
+const KEYS_LEFT = ['arrowleft', 'a'];
+const KEYS_RIGHT = ['arrowright', 'd'];
+const MOVE_KEYS = [...KEYS_LEFT, ...KEYS_RIGHT];
 
-interface GameState {
-  score: number;
-  timeLeft: number;
-  combo: number;
-  bestCombo: number;
-  cropsCollected: number;
-  obstaclesHit: number;
-  gameActive: boolean;
-  gameStarted: boolean;
-  items: GameItem[];
-  floatingTexts: Array<{ id: string; text: string; x: number; y: number; color: 'success' | 'error' }>;
-  messages: Array<{ id: string; text: string; type: 'success' | 'warning' | 'error' }>;
-  activePowerUp: PowerUpType | null;
-  powerUpEndTime: number;
-  shieldActive: boolean;
-  doubleActive: boolean;
-  shakeActive: boolean;
+function activeEffects(state: CosechasState): ActiveEffect[] {
+  return (Object.keys(POWER_UPS) as PowerUpType[])
+    .filter((type) => type !== 'time' && isEffectActive(state, type))
+    .map((type) => {
+      const config = POWER_UPS[type];
+      const expiresAt = state.effects[type] ?? 0;
+      return {
+        type,
+        icon: config.icon,
+        name: config.name,
+        remainingMs: expiresAt - state.elapsed,
+        totalMs: config.duration,
+      };
+    });
 }
 
 export function CosechasGame({ onQuit }: { onQuit: () => void }) {
-  const [gameState, setGameState] = useState<GameState>({
-    score: 0,
-    timeLeft: GAME_DURATION,
-    combo: 0,
-    bestCombo: 0,
-    cropsCollected: 0,
-    obstaclesHit: 0,
-    gameActive: false,
-    gameStarted: false,
-    items: [],
-    floatingTexts: [],
-    messages: [],
-    activePowerUp: null,
-    powerUpEndTime: 0,
-    shieldActive: false,
-    doubleActive: false,
-    shakeActive: false,
-  });
-
-  const [basketPos, setBasketPos] = useState(50);
-  const [countdownStart, setCountdownStart] = useState(0);
-  const [gameEnded, setGameEnded] = useState(false);
+  const [phase, setPhase] = useState<Phase>('start');
+  const [countdown, setCountdown] = useState(3);
+  const [state, setState] = useState<CosechasState>(createInitialState);
 
   const gameContainerRef = useRef<HTMLDivElement>(null);
-  const gameLoopRef = useRef<number | null>(null);
   const pressedKeysRef = useRef<Set<string>>(new Set());
 
-  const getRating = (score: number): { icon: string; label: string } => {
-    if (score >= 500) return { icon: '🏆', label: 'Maestro de la Cosecha' };
-    if (score >= 350) return { icon: '🌾', label: 'Experto' };
-    if (score >= 200) return { icon: '🌿', label: 'Agricultor' };
-    return { icon: '🌱', label: 'Aprendiz' };
-  };
-
-  const getComboMultiplier = (combo: number): number => {
-    if (combo >= 10) return 4;
-    if (combo >= 6) return 3;
-    if (combo >= 3) return 2;
-    return 1;
-  };
-
-  const clampPosition = (pos: number): number => {
-    return Math.max(5, Math.min(95, pos));
-  };
-
-  const addScore = useCallback((points: number, x: number, y: number, success: boolean) => {
-    if (!success && points < 0) {
-      setGameState((prev) => {
-        const newScore = Math.max(0, prev.score + points);
-        const floatingId = `float-${Date.now()}-${Math.random()}`;
-        const messageId = `msg-${Date.now()}`;
-
-        return {
-          ...prev,
-          score: newScore,
-          combo: 0,
-          obstaclesHit: prev.obstaclesHit + 1,
-          floatingTexts: [...prev.floatingTexts, { id: floatingId, text: `${points}`, x, y, color: 'error' }],
-          messages: [...prev.messages, { id: messageId, text: '¡Cuidado!', type: 'warning' }],
-          shakeActive: true,
-        };
-      });
-    } else if (success) {
-      setGameState((prev) => {
-        const multiplier = getComboMultiplier(prev.combo);
-        let basePoints = points;
-        if (prev.timeLeft <= 5000) basePoints *= 2;
-
-        const finalPoints = Math.floor(basePoints * multiplier);
-        const powerUpMultiplier = prev.doubleActive ? 2 : 1;
-        const totalPoints = Math.floor(finalPoints * powerUpMultiplier);
-
-        const newCombo = prev.combo + 1;
-        const newBestCombo = Math.max(prev.bestCombo, newCombo);
-
-        const floatingId = `float-${Date.now()}-${Math.random()}`;
-        const messageId = `msg-${Date.now()}`;
-
-        return {
-          ...prev,
-          score: prev.score + totalPoints,
-          combo: newCombo,
-          bestCombo: newBestCombo,
-          cropsCollected: prev.cropsCollected + 1,
-          floatingTexts: [...prev.floatingTexts, { id: floatingId, text: `+${totalPoints}`, x, y, color: 'success' }],
-          messages: [...prev.messages, { id: messageId, text: '¡Buena cosecha!', type: 'success' }],
-        };
-      });
-    }
-  }, []);
-
-  const handlePowerUpCollect = useCallback((powerUpType: PowerUpType) => {
-    setGameState((prev) => {
-      const newState = { ...prev, activePowerUp: powerUpType, powerUpEndTime: Date.now() + POWER_UPS[powerUpType].duration };
-
-      if (powerUpType === 'time') {
-        newState.timeLeft = prev.timeLeft + 5000;
-      } else if (powerUpType === 'double') {
-        newState.doubleActive = true;
-      } else if (powerUpType === 'shield') {
-        newState.shieldActive = true;
-      }
-
-      return newState;
-    });
-  }, []);
-
-  const spawnItem = useCallback(() => {
-    setGameState((prev) => {
-      if (!prev.gameActive) return prev;
-
-      const speedMultiplier = 1 + (GAME_DURATION - prev.timeLeft) / GAME_DURATION * 0.5;
-      const roll = Math.random();
-      let emoji = '';
-      let type: 'crop' | 'obstacle' | 'powerup' = 'crop';
-      let powerUpType: PowerUpType | undefined;
-
-      if (roll < 0.7) {
-        emoji = CROPS[Math.floor(Math.random() * CROPS.length)];
-        type = 'crop';
-      } else if (roll < 0.85) {
-        emoji = OBSTACLES[Math.floor(Math.random() * OBSTACLES.length)];
-        type = 'obstacle';
-      } else {
-        const powerUp = getRandomPowerUp();
-        if (powerUp) {
-          emoji = POWER_UPS[powerUp].icon;
-          type = 'powerup';
-          powerUpType = powerUp;
-        } else {
-          emoji = CROPS[Math.floor(Math.random() * CROPS.length)];
-          type = 'crop';
-        }
-      }
-
-      const newItem: GameItem = {
-        id: `item-${Date.now()}-${Math.random()}`,
-        emoji,
-        x: Math.random() * (GAME_WIDTH - 40) + 20,
-        y: -40,
-        vx: (Math.random() - 0.5) * 2 * speedMultiplier,
-        vy: 2 + Math.random() * speedMultiplier,
-        type,
-        powerUpType,
-      };
-
-      return { ...prev, items: [...prev.items, newItem] };
-    });
-  }, []);
-
-  // Handle keyboard
+  // Teclado: se leen las teclas fuera del updater para que el estado siga siendo puro.
   useEffect(() => {
+    const isMoveKey = (key: string) => MOVE_KEYS.includes(key.toLowerCase());
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(e.key)) {
+      if (isMoveKey(e.key)) {
         pressedKeysRef.current.add(e.key.toLowerCase());
         e.preventDefault();
       }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (['ArrowLeft', 'ArrowRight', 'a', 'A', 'd', 'D'].includes(e.key)) {
-        pressedKeysRef.current.delete(e.key.toLowerCase());
-      }
+      if (isMoveKey(e.key)) pressedKeysRef.current.delete(e.key.toLowerCase());
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
-  // Handle mouse movement
+  // Mouse y touch: la canasta sigue la posición horizontal del puntero.
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!gameContainerRef.current || !gameState.gameActive) return;
-
+    const moveTo = (clientX: number) => {
+      if (!gameContainerRef.current) return;
       const rect = gameContainerRef.current.getBoundingClientRect();
-      const relX = e.clientX - rect.left;
-      const percentX = (relX / rect.width) * 100;
-      setBasketPos(clampPosition(percentX));
+      const percentX = ((clientX - rect.left) / rect.width) * 100;
+      setState((prev) => (prev.gameActive ? { ...prev, basketX: clampBasket(percentX) } : prev));
     };
 
+    const handleMouseMove = (e: MouseEvent) => moveTo(e.clientX);
     const handleTouchMove = (e: TouchEvent) => {
-      if (!gameContainerRef.current || !gameState.gameActive) return;
-
-      const rect = gameContainerRef.current.getBoundingClientRect();
-      const relX = e.touches[0].clientX - rect.left;
-      const percentX = (relX / rect.width) * 100;
-      setBasketPos(clampPosition(percentX));
+      if (e.touches[0]) moveTo(e.touches[0].clientX);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove);
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [gameState.gameActive]);
+  }, []);
 
-  // Keyboard continuous movement
+  const readKeyboardDirection = useCallback((): -1 | 0 | 1 => {
+    const keys = pressedKeysRef.current;
+    const left = KEYS_LEFT.some((k) => keys.has(k));
+    const right = KEYS_RIGHT.some((k) => keys.has(k));
+    if (left === right) return 0;
+    return left ? -1 : 1;
+  }, []);
+
+  // Bucle principal del juego (un tick por TICK_MS).
   useEffect(() => {
-    const movementInterval = setInterval(() => {
-      if (!gameState.gameActive) return;
+    if (!state.gameActive) return;
 
-      setBasketPos((pos) => {
-        let newPos = pos;
-        const speed = 2;
+    const id = setInterval(() => {
+      const dir = readKeyboardDirection();
+      setState((prev) => stepGame(prev, dir));
+    }, TICK_MS);
 
-        if (pressedKeysRef.current.has('arrowleft') || pressedKeysRef.current.has('a')) {
-          newPos -= speed;
-        }
-        if (pressedKeysRef.current.has('arrowright') || pressedKeysRef.current.has('d')) {
-          newPos += speed;
-        }
+    return () => clearInterval(id);
+  }, [state.gameActive, readKeyboardDirection]);
 
-        return clampPosition(newPos);
-      });
-    }, 16);
-
-    return () => clearInterval(movementInterval);
-  }, [gameState.gameActive]);
-
-  // Game loop
+  // Aparición de cultivos, obstáculos y power-ups.
   useEffect(() => {
-    const tick = () => {
-      setGameState((prev) => {
-        if (!prev.gameActive) return prev;
+    if (!state.gameActive) return;
 
-        const newTimeLeft = Math.max(0, prev.timeLeft - 16);
-        const isGameEnded = newTimeLeft === 0;
+    const id = setInterval(() => {
+      setState((prev) => spawnItem(prev, Math.random));
+    }, SPAWN_MS);
 
-        let newActivePowerUp = prev.activePowerUp;
-        let newShieldActive = prev.shieldActive;
-        let newDoubleActive = prev.doubleActive;
+    return () => clearInterval(id);
+  }, [state.gameActive]);
 
-        if (prev.activePowerUp && Date.now() >= prev.powerUpEndTime) {
-          newActivePowerUp = null;
-          newDoubleActive = false;
-        }
-
-        const basketCenterX = (basketPos / 100) * GAME_WIDTH;
-
-        const updatedItems = prev.items
-          .map((item) => ({
-            ...item,
-            x: item.x + item.vx,
-            y: item.y + item.vy,
-          }))
-          .filter((item) => {
-            // Collision detection
-            if (item.y + 30 >= GAME_HEIGHT - 50) {
-              const distX = Math.abs(item.x - basketCenterX);
-
-              if (distX < BASKET_WIDTH / 2 + 20) {
-                if (item.type === 'crop') {
-                  addScore(10, item.x, item.y, true);
-                } else if (item.type === 'obstacle') {
-                  if (newShieldActive) {
-                    newShieldActive = false;
-                  } else {
-                    addScore(-5, item.x, item.y, false);
-                  }
-                } else if (item.type === 'powerup' && item.powerUpType) {
-                  handlePowerUpCollect(item.powerUpType);
-                }
-                return false;
-              }
-            }
-
-            return item.y <= GAME_HEIGHT;
-          });
-
-        return {
-          ...prev,
-          timeLeft: newTimeLeft,
-          gameActive: !isGameEnded,
-          items: updatedItems,
-          activePowerUp: newActivePowerUp,
-          shieldActive: newShieldActive,
-          doubleActive: newDoubleActive,
-        };
-      });
-    };
-
-    gameLoopRef.current = setInterval(tick, 16);
-    return () => {
-      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
-    };
-  }, [addScore, handlePowerUpCollect, basketPos]);
-
-  // Spawn items
+  // Cuenta regresiva antes de empezar.
   useEffect(() => {
-    if (!gameState.gameActive) return;
+    if (phase !== 'countdown') return;
 
-    const spawnInterval = setInterval(spawnItem, 400);
-    return () => clearInterval(spawnInterval);
-  }, [gameState.gameActive, spawnItem]);
+    if (countdown === 0) {
+      setState((prev) => ({ ...prev, gameActive: true }));
+      setPhase('playing');
+      return;
+    }
 
-  // Countdown
+    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [phase, countdown]);
+
+  // Fin de partida: guarda el mejor puntaje una sola vez.
   useEffect(() => {
-    if (countdownStart === 0 || gameState.gameActive) return;
-
-    const countdownInterval = setInterval(() => {
-      setCountdownStart((prev) => {
-        if (prev <= 1) {
-          setGameState((s) => ({ ...s, gameActive: true, gameStarted: true }));
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(countdownInterval);
-  }, [countdownStart, gameState.gameActive]);
-
-  // Cleanup floating texts
-  useEffect(() => {
-    setGameState((prev) => ({
-      ...prev,
-      floatingTexts: prev.floatingTexts.filter((_, i) => i < 3),
-      messages: prev.messages.filter((_, i) => i < 1),
-      shakeActive: false,
-    }));
-  }, [gameState.floatingTexts.length, gameState.messages.length]);
+    if (phase === 'playing' && !state.gameActive && state.timeLeft === 0) {
+      setBestScore('cosechas', state.score);
+      setPhase('ended');
+    }
+  }, [phase, state.gameActive, state.timeLeft, state.score]);
 
   const handleStart = () => {
-    setCountdownStart(3);
+    setCountdown(3);
+    setPhase('countdown');
   };
 
   const handleRestart = () => {
-    setGameEnded(false);
-    setBasketPos(50);
-    setCountdownStart(0);
-    setGameState({
-      score: 0,
-      timeLeft: GAME_DURATION,
-      combo: 0,
-      bestCombo: 0,
-      cropsCollected: 0,
-      obstaclesHit: 0,
-      gameActive: false,
-      gameStarted: false,
-      items: [],
-      floatingTexts: [],
-      messages: [],
-      activePowerUp: null,
-      powerUpEndTime: 0,
-      shieldActive: false,
-      doubleActive: false,
-      shakeActive: false,
-    });
+    setState(createInitialState());
+    setCountdown(3);
+    setPhase('start');
   };
 
-  if (!gameState.gameStarted && !gameState.gameActive && countdownStart === 0) {
+  if (phase === 'start') {
     return (
       <div className="cosechas-start-screen">
         <div className="start-content">
@@ -421,44 +182,69 @@ export function CosechasGame({ onQuit }: { onQuit: () => void }) {
     );
   }
 
-  if (countdownStart > 0 && !gameState.gameActive) {
+  if (phase === 'countdown') {
     return (
       <div className="cosechas-countdown">
-        <div className="countdown-number">{countdownStart}</div>
+        <div className="countdown-number" key={countdown}>{countdown}</div>
       </div>
     );
   }
 
-  if (!gameState.gameActive && gameState.timeLeft === 0 && !gameEnded) {
-    setGameEnded(true);
-    setBestScore('cosechas', gameState.score);
-  }
-
-  if (gameEnded) {
-    const rating = getRating(gameState.score);
+  if (phase === 'ended') {
+    const rating = getRating(state.score);
     return (
       <GameResult
-        score={gameState.score}
+        score={state.score}
         title="Cosechas"
         onRestart={handleRestart}
         onQuit={onQuit}
         rating={rating}
+        scoreReport={{
+          game_slug: 'cosechas',
+          difficulty: null,
+          score: state.score,
+          duration_seconds: Math.round(state.elapsed / 1000),
+          metadata: {
+            crops_collected: state.cropsCollected,
+            obstacles_hit: state.obstaclesHit,
+            best_combo: state.bestCombo,
+            shields_used: state.shieldsUsed,
+          },
+        }}
         stats={[
-          { label: 'Cultivos Recolectados', value: gameState.cropsCollected },
-          { label: 'Obstáculos Golpeados', value: gameState.obstaclesHit },
-          { label: 'Mejor Combo', value: `x${gameState.bestCombo}` },
+          { label: 'Cultivos Recolectados', value: state.cropsCollected },
+          { label: 'Obstáculos Golpeados', value: state.obstaclesHit },
+          { label: 'Escudos Usados', value: state.shieldsUsed },
+          { label: 'Mejor Combo', value: `x${state.bestCombo}` },
         ]}
       />
     );
   }
 
+  const basketScale = isEffectActive(state, 'basket') ? SUPER_BASKET_SCALE : 1;
+  const magnetOn = isEffectActive(state, 'magnet');
+  const multiplier = comboMultiplier(state.combo);
+  const lastFeedback = state.feedback;
+  const bounceKey = state.flash?.tone === "catch" ? state.flash.id : 0;
+
   return (
-    <GameShell title="🌾 Cosechas" onQuit={onQuit} score={gameState.score} timeLeft={gameState.timeLeft / 1000} maxTime={GAME_DURATION / 1000}>
-      <div ref={gameContainerRef} className={`cosechas-game ${gameState.shakeActive ? 'shake' : ''}`}>
-        {gameState.items.map((item) => (
+    <GameShell title="🌾 Cosechas" onQuit={onQuit} score={state.score} timeLeft={state.timeLeft / 1000} maxTime={GAME_DURATION / 1000}>
+      <div
+        ref={gameContainerRef}
+        className={`cosechas-game ${state.shakeUntil > state.elapsed ? 'shake' : ''}`}
+      >
+        {magnetOn && (
+          <div
+            className="magnet-field"
+            style={{ left: `${state.basketX}%`, width: `${((MAGNET_RADIUS * 2) / GAME_WIDTH) * 100}%` }}
+            aria-hidden="true"
+          />
+        )}
+
+        {state.items.map((item) => (
           <div
             key={item.id}
-            className="game-item"
+            className={`game-item game-item-${item.type}`}
             style={{
               left: `${(item.x / GAME_WIDTH) * 100}%`,
               top: `${(item.y / GAME_HEIGHT) * 100}%`,
@@ -468,25 +254,34 @@ export function CosechasGame({ onQuit }: { onQuit: () => void }) {
           </div>
         ))}
 
-        <div className="basket" style={{ left: `${basketPos}%` }}>
-          <span className="basket-icon">🧺</span>
+        <div
+          className={`basket ${isEffectActive(state, 'basket') ? 'basket-super' : ''}`}
+          style={{ left: `${state.basketX}%`, transform: `translateX(-50%) scale(${basketScale})` }}
+        >
+          <span key={bounceKey} className={bounceKey ? "basket-icon basket-bounce" : "basket-icon"}>🧺</span>
         </div>
 
-        <ComboDisplay combo={gameState.combo} show={gameState.combo >= 3} />
-        <PowerUpIndicator powerUp={gameState.activePowerUp ? POWER_UPS[gameState.activePowerUp].icon : null} duration={gameState.activePowerUp ? POWER_UPS[gameState.activePowerUp].duration : 0} />
-        <FinalRound show={gameState.timeLeft <= 5000} timeLeft={gameState.timeLeft / 1000} />
+        {state.flash && <FlashOverlay key={state.flash.id} tone={state.flash.tone} />}
 
-        {gameState.floatingTexts.map((text) => (
-          <FloatingText key={text.id} {...text} duration={800} />
+        <ComboDisplay combo={state.combo} multiplier={multiplier} />
+        <EffectIndicator effects={activeEffects(state)} />
+        <FinalRound show={state.timeLeft <= FINAL_ROUND_MS} />
+
+        {state.floatingScores.map((f) => (
+          <FloatingText
+            key={f.id}
+            text={f.text}
+            x={(f.x / GAME_WIDTH) * 100}
+            y={(f.y / GAME_HEIGHT) * 100}
+            color={f.tone}
+          />
         ))}
 
-        {gameState.messages.map((msg) => (
-          <GameMessage key={msg.id} message={msg.text} type={msg.type} duration={1200} />
-        ))}
+        {lastFeedback && <GameMessage key={lastFeedback.id} message={lastFeedback.text} type={lastFeedback.tone} duration={1200} />}
 
         <div className="mobile-controls">
-          <button onClick={() => setBasketPos((p) => clampPosition(p - 5))}>⬅️</button>
-          <button onClick={() => setBasketPos((p) => clampPosition(p + 5))}>➡️</button>
+          <button onClick={() => setState((prev) => ({ ...prev, basketX: clampBasket(prev.basketX - 5) }))}>⬅️</button>
+          <button onClick={() => setState((prev) => ({ ...prev, basketX: clampBasket(prev.basketX + 5) }))}>➡️</button>
         </div>
       </div>
     </GameShell>

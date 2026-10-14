@@ -200,6 +200,14 @@ class OperationalRepository:
             logger.error(f"Failed to list farms: {str(e)}")
             return []
 
+    async def list_all_farms_by_producer(self, producer_id: UUID) -> list[dict]:
+        """Todas las fincas del productor, activas o no (uso del propio productor)."""
+        client = self._get_client()
+        response = (
+            client.table("farms").select("*").eq("producer_id", str(producer_id)).execute()
+        )
+        return response.data or []
+
     async def update_farm(self, farm_id: UUID, update_data: dict) -> dict:
         """Update a farm."""
         client = self._get_client()
@@ -389,6 +397,22 @@ class OperationalRepository:
         except Exception as e:
             logger.error(f"Failed to get current offers: {str(e)}")
             return []
+
+    # ========== GENERIC (ownership and listings) ==========
+
+    async def get_row(self, table: str, row_id: UUID | str, columns: str = "*") -> Optional[dict]:
+        """Fila por ID o None. Usa limit(1) para no lanzar excepciones por filas ausentes."""
+        response = (
+            self._get_client().table(table).select(columns).eq("id", str(row_id)).limit(1).execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def select_in(self, table: str, column: str, values: list[str], columns: str = "*") -> list[dict]:
+        """Filas cuyo `column` está en `values`. Lista vacía -> sin consulta."""
+        if not values:
+            return []
+        response = self._get_client().table(table).select(columns).in_(column, values).execute()
+        return response.data or []
 
     # ========== HELPERS ==========
 

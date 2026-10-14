@@ -12,7 +12,7 @@ interface GameShellProps {
 }
 
 export function GameShell({ title, description, score, timeLeft, maxTime, children, onQuit }: GameShellProps) {
-  const timeProgress = maxTime && timeLeft ? Math.max(0, (timeLeft / maxTime) * 100) : 100;
+  const timeProgress = maxTime && timeLeft !== undefined ? Math.min(100, Math.max(0, (timeLeft / maxTime) * 100)) : 100;
 
   return (
     <div className="game-shell">

@@ -52,8 +52,8 @@ export const POWER_UPS: Record<PowerUpType, PowerUp> = {
   },
 };
 
-export function getRandomPowerUp(): PowerUpType | null {
-  const roll = Math.random();
+export function getRandomPowerUp(rand: () => number = Math.random): PowerUpType | null {
+  const roll = rand();
   let accumulated = 0;
 
   for (const [type, powerUp] of Object.entries(POWER_UPS)) {

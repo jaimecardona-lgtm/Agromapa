@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { api, Producer, Farm, FarmCropDetail, CurrentOffer } from '@/services/api';
+import { useAuth } from '@/auth/AuthContext';
+import { ProducerGate } from '@/components/auth/ProducerGate';
 import '../styles/OperationalManagement.css';
 
 type Tab = 'producers' | 'farms' | 'crops' | 'offers' | 'current-offer';
 
+// Pestañas de escritura productiva: requieren cuenta con rol productor.
+const PRODUCTIVE_TABS: Tab[] = ['producers', 'farms', 'crops', 'offers'];
+
 export function OperationalManagement() {
   const [activeTab, setActiveTab] = useState<Tab>('producers');
-  const [producers, setProducers] = useState<Producer[]>([]);
+  const { status, roles } = useAuth();
+  const canManage = status === 'authenticated' && roles.includes('producer');
   const [farms, setFarms] = useState<Farm[]>([]);
   const [crops, setCrops] = useState<FarmCropDetail[]>([]);
   const [currentOffers, setCurrentOffers] = useState<CurrentOffer[]>([]);
@@ -20,13 +26,6 @@ export function OperationalManagement() {
   const [selectedCrop, setSelectedCrop] = useState<FarmCropDetail | null>(null);
 
   // Form inputs
-  const [producerForm, setProducerForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    organization: '',
-  });
-
   const [farmForm, setFarmForm] = useState({
     name: '',
     municipality_code: '',
@@ -56,23 +55,31 @@ export function OperationalManagement() {
 
   // Load data
   useEffect(() => {
-    loadProducers();
     loadCurrentOffers();
   }, []);
 
-  async function loadProducers() {
-    try {
-      setLoading(true);
-      const res = await api.operational.producers.list();
-      setProducers(res.data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load producers');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // El productor es el de la cuenta (vínculo por token), nunca uno elegido de una lista.
+  useEffect(() => {
+    if (!canManage) return undefined;
+    let cancelled = false;
+
+    api.operational.producers
+      .linkMine()
+      .then(async (res) => {
+        if (cancelled) return;
+        setSelectedProducer(res.data);
+        const farmsRes = await api.operational.farms.listByProducer(res.data.id);
+        if (!cancelled) setFarms(farmsRes.data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError('No pudimos cargar tu registro productivo.');
+        console.error(err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage]);
 
   async function loadFarmsByProducer(producerId: string) {
     try {
@@ -110,23 +117,6 @@ export function OperationalManagement() {
       setError(null);
     } catch (err) {
       setError('Failed to load current offers');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Producer operations
-  async function handleCreateProducer(e: FormEvent) {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      await api.operational.producers.create(producerForm);
-      setProducerForm({ name: '', email: '', phone: '', organization: '' });
-      await loadProducers();
-      setError(null);
-    } catch (err) {
-      setError('Failed to create producer');
       console.error(err);
     } finally {
       setLoading(false);
@@ -177,7 +167,6 @@ export function OperationalManagement() {
     try {
       setLoading(true);
       await api.operational.farms.create({
-        producer_id: selectedProducer.id,
         name: farmForm.name,
         municipality_code: farmForm.municipality_code,
         latitude: parseFloat(farmForm.latitude),
@@ -260,12 +249,9 @@ export function OperationalManagement() {
       <div className="tabs">
         <button
           className={`tab ${activeTab === 'producers' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('producers');
-            loadProducers();
-          }}
+          onClick={() => setActiveTab('producers')}
         >
-          Productores
+          Mi productor
         </button>
         <button
           className={`tab ${activeTab === 'farms' ? 'active' : ''}`}
@@ -297,66 +283,26 @@ export function OperationalManagement() {
       </div>
 
       <div className="tab-content">
-        {/* Producers Tab */}
-        {activeTab === 'producers' && (
+        {PRODUCTIVE_TABS.includes(activeTab) && !canManage && (
           <div className="section">
-            <h3>Gestionar Productores</h3>
-            <form onSubmit={handleCreateProducer} className="form">
-              <input
-                type="text"
-                placeholder="Nombre"
-                value={producerForm.name}
-                onChange={(e) => setProducerForm({ ...producerForm, name: e.target.value })}
-                required
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                value={producerForm.email}
-                onChange={(e) => setProducerForm({ ...producerForm, email: e.target.value })}
-              />
-              <input
-                type="tel"
-                placeholder="Teléfono"
-                value={producerForm.phone}
-                onChange={(e) => setProducerForm({ ...producerForm, phone: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Organización"
-                value={producerForm.organization}
-                onChange={(e) => setProducerForm({ ...producerForm, organization: e.target.value })}
-              />
-              <button type="submit" disabled={loading}>
-                {loading ? 'Creando...' : 'Crear Productor'}
-              </button>
-            </form>
+            <ProducerGate>{null}</ProducerGate>
+          </div>
+        )}
 
-            <div className="list">
-              <h4>Productores Registrados</h4>
-              {producers.map((p) => (
-                <div
-                  key={p.id}
-                  className={`item ${selectedProducer?.id === p.id ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedProducer(p);
-                    setActiveTab('farms');
-                    loadFarmsByProducer(p.id);
-                  }}
-                >
-                  <div className="item-header">
-                    <strong>{p.name}</strong>
-                  </div>
-                  {p.email && <div className="item-detail">📧 {p.email}</div>}
-                  {p.phone && <div className="item-detail">📱 {p.phone}</div>}
-                </div>
-              ))}
-            </div>
+        {/* Producers Tab: el registro productivo se vincula a la cuenta */}
+        {activeTab === 'producers' && canManage && (
+          <div className="section">
+            <h3>Mi registro productivo</h3>
+            <p>
+              Tu registro está vinculado a tu cuenta
+              {selectedProducer ? `: ${selectedProducer.name}` : ''}. Las fincas, cultivos y ofertas que registres
+              quedan a tu nombre.
+            </p>
           </div>
         )}
 
         {/* Farms Tab */}
-        {activeTab === 'farms' && (
+        {activeTab === 'farms' && canManage && (
           <div className="section">
             <h3>Gestionar Fincas {selectedProducer && `- ${selectedProducer.name}`}</h3>
 
@@ -460,7 +406,7 @@ export function OperationalManagement() {
         )}
 
         {/* Crops Tab */}
-        {activeTab === 'crops' && (
+        {activeTab === 'crops' && canManage && (
           <div className="section">
             <h3>Gestionar Cultivos {selectedFarm && `- ${selectedFarm.name}`}</h3>
 
@@ -520,7 +466,7 @@ export function OperationalManagement() {
         )}
 
         {/* Offers Tab */}
-        {activeTab === 'offers' && (
+        {activeTab === 'offers' && canManage && (
           <div className="section">
             <h3>Crear Oferta {selectedCrop && `- ${selectedCrop.crop_name}`}</h3>
 

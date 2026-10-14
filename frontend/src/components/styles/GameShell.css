@@ -101,3 +101,16 @@
     min-height: 300px;
   }
 }
+
+/* Móvil: marcadores en una fila compacta para dejar más alto el área de juego. */
+@media (max-width: 480px) {
+  .game-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .game-header h2 {
+    font-size: 18px;
+  }
+}

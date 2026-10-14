@@ -1,9 +1,9 @@
 """Tests for operational model (producers, farms, crops, offers)."""
 
 from datetime import date, timedelta
-from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.operational import (
     FarmCreate,
@@ -35,10 +35,10 @@ class TestProducers:
         """Test producer update schema."""
         update = ProducerUpdate(
             phone="+57 320 9876543",
-            active=True,
         )
         assert update.phone == "+57 320 9876543"
-        assert update.active is True
+        with pytest.raises(ValidationError):
+            ProducerUpdate(active=True)
 
     def test_producer_required_fields(self):
         """Test producer required field."""
@@ -52,9 +52,7 @@ class TestFarms:
 
     def test_farm_create_schema(self):
         """Test farm creation schema."""
-        producer_id = uuid4()
         farm = FarmCreate(
-            producer_id=producer_id,
             name="La Esperanza",
             municipality_code="76001",
             latitude=4.5981,
@@ -68,10 +66,8 @@ class TestFarms:
 
     def test_farm_latitude_validation(self):
         """Test farm latitude validation."""
-        producer_id = uuid4()
         with pytest.raises(ValueError):
             FarmCreate(
-                producer_id=producer_id,
                 name="Invalid",
                 municipality_code="76001",
                 latitude=91.0,  # Invalid
@@ -80,10 +76,8 @@ class TestFarms:
 
     def test_farm_longitude_validation(self):
         """Test farm longitude validation."""
-        producer_id = uuid4()
         with pytest.raises(ValueError):
             FarmCreate(
-                producer_id=producer_id,
                 name="Invalid",
                 municipality_code="76001",
                 latitude=4.5,
@@ -92,10 +86,8 @@ class TestFarms:
 
     def test_farm_area_validation(self):
         """Test farm area validation."""
-        producer_id = uuid4()
         with pytest.raises(ValueError):
             FarmCreate(
-                producer_id=producer_id,
                 name="Invalid",
                 municipality_code="76001",
                 latitude=4.5,
@@ -109,9 +101,7 @@ class TestFarmCrops:
 
     def test_farm_crop_create_schema(self):
         """Test farm crop creation schema."""
-        farm_id = uuid4()
         crop = FarmCropCreate(
-            farm_id=farm_id,
             crop_name="Coffee",
             description="Variedad Arabica",
             area_hectares=10.0,
@@ -121,9 +111,7 @@ class TestFarmCrops:
 
     def test_farm_crop_minimal(self):
         """Test minimal farm crop."""
-        farm_id = uuid4()
         crop = FarmCropCreate(
-            farm_id=farm_id,
             crop_name="Plantain",
         )
         assert crop.crop_name == "Plantain"
@@ -135,10 +123,8 @@ class TestProductionOffers:
 
     def test_offer_create_schema(self):
         """Test offer creation schema."""
-        farm_crop_id = uuid4()
         today = date.today()
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=1000.0,
             unit="kg",
             availability_start=today,
@@ -151,10 +137,8 @@ class TestProductionOffers:
 
     def test_offer_available_quantity_validation(self):
         """Test offer available_quantity must be positive."""
-        farm_crop_id = uuid4()
         with pytest.raises(ValueError):
             ProductionOfferCreate(
-                farm_crop_id=farm_crop_id,
                 available_quantity=-100.0,  # Invalid
                 unit="kg",
             )
@@ -179,12 +163,10 @@ class TestProductionOffers:
 
     def test_offer_date_validity(self):
         """Test offer date range validity."""
-        farm_crop_id = uuid4()
         today = date.today()
 
         # Valid: availability_end >= availability_start
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=100.0,
             unit="kg",
             availability_start=today,
@@ -206,11 +188,9 @@ class TestOfferStatuses:
 
     def test_offer_historical_status(self):
         """Test historical status for long-past offers."""
-        farm_crop_id = uuid4()
         old_date = date.today() - timedelta(days=365)
 
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=100.0,
             unit="kg",
             availability_end=old_date,
@@ -223,7 +203,6 @@ class TestCurrentOfferFiltering:
 
     def test_available_offer_criteria(self):
         """Test criteria for available offers."""
-        farm_crop_id = uuid4()
         today = date.today()
 
         # Offer should be available:
@@ -232,7 +211,6 @@ class TestCurrentOfferFiltering:
         # - availability_end >= today (or null)
 
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=100.0,
             unit="kg",
             availability_start=today - timedelta(days=5),
@@ -243,11 +221,9 @@ class TestCurrentOfferFiltering:
 
     def test_expired_offer(self):
         """Test expired offer (availability_end < today)."""
-        farm_crop_id = uuid4()
         today = date.today()
 
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=100.0,
             unit="kg",
             availability_end=today - timedelta(days=1),
@@ -257,11 +233,9 @@ class TestCurrentOfferFiltering:
 
     def test_not_yet_available_offer(self):
         """Test offer not yet available (availability_start > today)."""
-        farm_crop_id = uuid4()
         today = date.today()
 
         offer = ProductionOfferCreate(
-            farm_crop_id=farm_crop_id,
             available_quantity=100.0,
             unit="kg",
             availability_start=today + timedelta(days=10),

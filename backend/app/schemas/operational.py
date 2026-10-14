@@ -1,14 +1,19 @@
 """Pydantic schemas for operational data (producers, farms, offers)."""
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+OFFER_STATUSES = ("available", "harvested", "sold_out", "inactive", "historical")
+OfferStatus = Literal["available", "harvested", "sold_out", "inactive", "historical"]
+
 
 class ProducerCreate(BaseModel):
-    """Create a producer."""
+    """Create the producer linked to the authenticated account (user_id is never read from the body)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     document_type: Optional[str] = None
@@ -19,7 +24,9 @@ class ProducerCreate(BaseModel):
 
 
 class ProducerUpdate(BaseModel):
-    """Update a producer."""
+    """Update the producer. `active` is managed by the producer role, not by this payload."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = None
     document_type: Optional[str] = None
@@ -27,7 +34,6 @@ class ProducerUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     organization: Optional[str] = None
-    active: Optional[bool] = None
 
 
 class ProducerResponse(BaseModel):
@@ -48,9 +54,10 @@ class ProducerResponse(BaseModel):
 
 
 class FarmCreate(BaseModel):
-    """Create a farm."""
+    """Create a farm for the authenticated producer (producer_id is resolved server-side)."""
 
-    producer_id: UUID
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     municipality_code: str
     latitude: float = Field(ge=-90, le=90)
@@ -63,6 +70,8 @@ class FarmCreate(BaseModel):
 
 class FarmUpdate(BaseModel):
     """Update a farm."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = None
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
@@ -96,9 +105,10 @@ class FarmResponse(BaseModel):
 
 
 class FarmCropCreate(BaseModel):
-    """Create a farm crop."""
+    """Create a crop for the farm in the route (farm_id is not read from the body)."""
 
-    farm_id: UUID
+    model_config = ConfigDict(extra="forbid")
+
     crop_name: str
     area_hectares: Optional[float] = Field(default=None, ge=0)
     description: Optional[str] = None
@@ -106,6 +116,8 @@ class FarmCropCreate(BaseModel):
 
 class FarmCropUpdate(BaseModel):
     """Update a farm crop."""
+
+    model_config = ConfigDict(extra="forbid")
 
     crop_name: Optional[str] = None
     area_hectares: Optional[float] = Field(default=None, ge=0)
@@ -128,9 +140,10 @@ class FarmCropResponse(BaseModel):
 
 
 class ProductionOfferCreate(BaseModel):
-    """Create a production offer."""
+    """Create an offer for the crop in the route (farm_crop_id is not read from the body)."""
 
-    farm_crop_id: UUID
+    model_config = ConfigDict(extra="forbid")
+
     available_quantity: float = Field(gt=0)
     unit: str
     availability_start: Optional[date] = None
@@ -143,12 +156,14 @@ class ProductionOfferCreate(BaseModel):
 class ProductionOfferUpdate(BaseModel):
     """Update a production offer."""
 
+    model_config = ConfigDict(extra="forbid")
+
     available_quantity: Optional[float] = Field(default=None, gt=0)
     unit: Optional[str] = None
     availability_start: Optional[date] = None
     availability_end: Optional[date] = None
     price_per_unit: Optional[float] = Field(default=None, ge=0)
-    status: Optional[str] = None
+    status: Optional[OfferStatus] = None
     description: Optional[str] = None
     notes: Optional[str] = None
     harvested_at: Optional[datetime] = None

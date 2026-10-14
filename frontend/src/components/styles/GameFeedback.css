@@ -1,10 +1,86 @@
 .floating-text {
-  position: fixed;
-  font-weight: bold;
-  font-size: 20px;
+  position: absolute;
+  transform: translate(-50%, 0);
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1;
+  white-space: nowrap;
   pointer-events: none;
-  animation: float-up 0.8s ease-out forwards;
-  z-index: 100;
+  animation: float-up 0.9s ease-out forwards;
+  z-index: 60;
+}
+
+.flash-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 40;
+  animation: flash-fade 0.45s ease-out forwards;
+}
+
+.flash-catch {
+  background: radial-gradient(circle at 50% 90%, rgba(74, 222, 128, 0.55), transparent 70%);
+}
+
+.flash-hit {
+  background: radial-gradient(circle at 50% 90%, rgba(239, 68, 68, 0.55), transparent 70%);
+}
+
+.flash-shield {
+  background: radial-gradient(circle at 50% 90%, rgba(59, 130, 246, 0.6), transparent 70%);
+}
+
+.flash-power {
+  background: radial-gradient(circle at 50% 50%, rgba(250, 204, 21, 0.5), transparent 70%);
+}
+
+@keyframes flash-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.effect-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.effect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.effect-bar {
+  display: inline-block;
+  width: 40px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.effect-progress {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #84cc16);
+}
+
+.game-message-info {
+  background: rgba(59, 130, 246, 0.92);
 }
 
 .floating-success {

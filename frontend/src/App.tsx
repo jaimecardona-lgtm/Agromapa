@@ -5,6 +5,7 @@ import { StatusPanel } from '@/components/StatusPanel';
 import { AgentPanel } from '@/components/AgentPanel';
 import { OperationalManagement } from '@/components/OperationalManagement';
 import { LearnGames } from '@/components/games/LearnGames';
+import { AccountMenu } from '@/components/auth/AccountMenu';
 import { EducationalResources } from '@/components/EducationalResources';
 import './App.css';
 
@@ -337,6 +338,9 @@ function App() {
               <p className="header-tagline">Biodiversidad • Territorio • Bioeconomía</p>
               <p className="header-subtitle">Explorador territorial y agroproductivo — UPRA & EVA 2024</p>
             </div>
+          </div>
+          <div className="header-actions">
+            <AccountMenu />
           </div>
           {health && (
             <div className="header-badge">

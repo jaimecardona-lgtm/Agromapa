@@ -126,7 +126,7 @@ async def test_agent_get_municipality_agriculture_tool():
     """Test get_municipality_agriculture tool with mocked data."""
     from app.tools.agent_tools import execute_tool
 
-    with patch("app.services.agriculture_service.get_municipality_agriculture") as mock_ag:
+    with patch("app.tools.agent_tools.get_municipality_agriculture") as mock_ag:
         mock_ag.return_value = {
             "municipality": {"dane_code": "76001", "name": "Cali"},
             "year": 2024,

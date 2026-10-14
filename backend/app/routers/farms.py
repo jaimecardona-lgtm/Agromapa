@@ -1,9 +1,8 @@
-"""Farms API routes (development only)."""
+"""Farms API routes (public read; creation moved to the authenticated operational API)."""
 
 from fastapi import APIRouter, HTTPException
 
-from app.core.config import settings
-from app.services.farm_service import create_farm, get_municipality_farms
+from app.services.farm_service import get_municipality_farms
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
@@ -20,35 +19,13 @@ async def list_municipality_farms(municipality_code: str):
     }
 
 
-@router.post("/")
-async def create_new_farm(
-    name: str,
-    municipality_code: str,
-    latitude: float,
-    longitude: float,
-    description: str = None,
-    corregimiento_name: str = None,
-    vereda_name: str = None,
-):
-    """Create a new farm (development only)."""
+@router.post("/", status_code=410)
+async def create_new_farm_retired():
+    """Retirado: creaba fincas sin autenticación ni productor.
 
-    if settings.APP_ENV != "development":
-        raise HTTPException(status_code=403, detail="Farm creation only available in development")
-
-    try:
-        farm = await create_farm(
-            name=name,
-            municipality_code=municipality_code,
-            latitude=latitude,
-            longitude=longitude,
-            description=description,
-            corregimiento_name=corregimiento_name,
-            vereda_name=vereda_name,
-        )
-
-        return {
-            "data": farm,
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    Usa POST /api/operational/farms con sesión de productor.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail="Endpoint retirado. Usa POST /api/operational/farms con una cuenta de productor.",
+    )

@@ -3,13 +3,15 @@ import '../styles/GameFeedback.css';
 
 interface FloatingTextProps {
   text: string;
+  /** Posición horizontal dentro del contenedor, en porcentaje (0-100). */
   x: number;
+  /** Posición vertical dentro del contenedor, en porcentaje (0-100). */
   y: number;
   color: 'success' | 'error';
   duration?: number;
 }
 
-export function FloatingText({ text, x, y, color, duration = 800 }: FloatingTextProps) {
+export function FloatingText({ text, x, y, color, duration = 900 }: FloatingTextProps) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -22,32 +24,29 @@ export function FloatingText({ text, x, y, color, duration = 800 }: FloatingText
   return (
     <div
       className={`floating-text floating-${color}`}
-      style={{
-        left: `${x}px`,
-        top: `${y}px`,
-      }}
+      style={{ left: `${x}%`, top: `${y}%` }}
     >
       {text}
     </div>
   );
 }
 
-interface ComboDisplayProps {
-  combo: number;
-  show: boolean;
+interface FlashOverlayProps {
+  tone: 'catch' | 'hit' | 'shield' | 'power';
 }
 
-export function ComboDisplay({ combo, show }: ComboDisplayProps) {
-  if (!show || combo < 3) return null;
+/** Destello de pantalla. Se monta de nuevo con `key` por evento para reiniciar la animación. */
+export function FlashOverlay({ tone }: FlashOverlayProps) {
+  return <div className={`flash-overlay flash-${tone}`} aria-hidden="true" />;
+}
 
-  const getComboMultiplier = (c: number): number => {
-    if (c >= 10) return 4;
-    if (c >= 6) return 3;
-    if (c >= 3) return 2;
-    return 1;
-  };
+interface ComboDisplayProps {
+  combo: number;
+  multiplier: number;
+}
 
-  const multiplier = getComboMultiplier(combo);
+export function ComboDisplay({ combo, multiplier }: ComboDisplayProps) {
+  if (combo < 3) return null;
 
   return (
     <div className="combo-display">
@@ -61,55 +60,45 @@ export function ComboDisplay({ combo, show }: ComboDisplayProps) {
   );
 }
 
-interface PowerUpIndicatorProps {
-  powerUp: string | null;
-  duration: number;
+export interface ActiveEffect {
+  type: string;
+  icon: string;
+  name: string;
+  remainingMs: number;
+  totalMs: number;
 }
 
-export function PowerUpIndicator({ powerUp, duration }: PowerUpIndicatorProps) {
-  const [progress, setProgress] = useState(100);
+interface EffectIndicatorProps {
+  effects: ActiveEffect[];
+}
 
-  useEffect(() => {
-    if (!powerUp) return;
-
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, (1 - elapsed / duration) * 100);
-      setProgress(remaining);
-
-      if (remaining === 0) {
-        clearInterval(interval);
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [powerUp, duration]);
-
-  if (!powerUp) return null;
+export function EffectIndicator({ effects }: EffectIndicatorProps) {
+  if (effects.length === 0) return null;
 
   return (
-    <div className="power-up-indicator">
-      <div className="power-up-icon">
-        {powerUp}
-      </div>
-      <div className="power-up-bar">
-        <div
-          className="power-up-progress"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+    <div className="effect-indicator" aria-live="polite">
+      {effects.map((effect) => (
+        <div key={effect.type} className="effect-chip" title={effect.name}>
+          <span className="effect-icon">{effect.icon}</span>
+          <span className="effect-name">{effect.name}</span>
+          <span className="effect-bar">
+            <span
+              className="effect-progress"
+              style={{ width: `${Math.max(0, Math.min(100, (effect.remainingMs / effect.totalMs) * 100))}%` }}
+            />
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
 
 interface FinalRoundProps {
   show: boolean;
-  timeLeft: number;
 }
 
-export function FinalRound({ show, timeLeft }: FinalRoundProps) {
-  if (!show || timeLeft > 5) return null;
+export function FinalRound({ show }: FinalRoundProps) {
+  if (!show) return null;
 
   return (
     <div className="final-round-banner">
@@ -122,10 +111,11 @@ export function FinalRound({ show, timeLeft }: FinalRoundProps) {
 
 interface GameMessageProps {
   message: string;
-  type: 'success' | 'warning' | 'error';
+  type: 'success' | 'warning' | 'error' | 'info';
   duration?: number;
 }
 
+/** Mensaje breve. Se monta de nuevo con `key` por evento para mostrarse siempre. */
 export function GameMessage({ message, type, duration = 1200 }: GameMessageProps) {
   const [visible, setVisible] = useState(true);
 
@@ -137,7 +127,7 @@ export function GameMessage({ message, type, duration = 1200 }: GameMessageProps
   if (!visible) return null;
 
   return (
-    <div className={`game-message game-message-${type}`}>
+    <div className={`game-message game-message-${type}`} role="status">
       {message}
     </div>
   );

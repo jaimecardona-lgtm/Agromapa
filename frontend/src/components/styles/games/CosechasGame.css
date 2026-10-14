@@ -203,3 +203,61 @@
     font-size: 12px;
   }
 }
+
+/* Imán: campo visible alrededor de la canasta. Los cultivos se curvan dentro de él. */
+.magnet-field {
+  position: absolute;
+  bottom: 0;
+  height: 60%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: radial-gradient(ellipse at bottom, rgba(250, 204, 21, 0.35), rgba(250, 204, 21, 0) 70%);
+  border: 2px dashed rgba(250, 204, 21, 0.7);
+  border-bottom: none;
+  pointer-events: none;
+  animation: magnet-pulse 1s ease-in-out infinite;
+  z-index: 5;
+}
+
+@keyframes magnet-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Súper canasta: brillo y transformación de escala (ver inline style). */
+.basket {
+  transform-origin: bottom center;
+}
+
+.basket-super .basket-icon {
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.9));
+}
+
+/* Cosecha: la canasta da un pequeño rebote con cada captura. */
+.basket-icon.basket-bounce {
+  display: block;
+  animation: basket-bounce 0.3s ease-out;
+}
+
+@keyframes basket-bounce {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}
+
+.game-item-powerup {
+  animation: powerup-glow 1s ease-in-out infinite;
+}
+
+@keyframes powerup-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(250, 204, 21, 0.6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(250, 204, 21, 1)); }
+}
+
+.cosechas-game .floating-text {
+  font-size: 30px;
+}
+
+.cosechas-game .game-message {
+  top: 12%;
+}

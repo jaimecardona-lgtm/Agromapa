@@ -7,7 +7,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.routers import agent, agriculture, farms, health, operational, territories
+from app.routers import (
+    agent,
+    agriculture,
+    farms,
+    game_scores,
+    health,
+    identity,
+    operational,
+    territories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +27,14 @@ app = FastAPI(
     debug=settings.APP_DEBUG,
 )
 
-# CORS Configuration
+# CORS: orígenes explícitos y solo los métodos/encabezados que usa la API.
+# La sesión viaja en `Authorization: Bearer`, no en cookies: allow_credentials=False.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Routers - Real data only
@@ -35,6 +45,8 @@ app.include_router(agriculture.router, prefix=api_v1_prefix)
 app.include_router(farms.router, prefix=api_v1_prefix)
 app.include_router(operational.router, prefix=api_v1_prefix)
 app.include_router(agent.router, prefix=api_v1_prefix)
+app.include_router(game_scores.router, prefix=api_v1_prefix)
+app.include_router(identity.router, prefix=api_v1_prefix)
 
 logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 

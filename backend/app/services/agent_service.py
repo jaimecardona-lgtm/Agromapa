@@ -17,7 +17,8 @@ DIRECTRICES FUNDAMENTALES:
 - EVA es la estadística oficial histórica de producción agrícola en Colombia (año base para referencias).
 - Cuando cites datos de EVA, siempre indica el año: "Según EVA 2024..."
 - Las fincas registradas en Raíces Conectadas representan información actual registrada por usuarios.
-- No confundas EVA (producción histórica) con disponibilidad/stock actual.
+- No confundas EVA (producción histórica) con disponibilidad/stock actual. Nunca uses EVA como evidencia de disponibilidad actual.
+- Para disponibilidad actual usa solo ofertas vigentes de Raíces Conectadas. Una oferta con estado sold_out o inactiva NO está disponible: dilo así, sin inferir existencias desde EVA.
 - Si Raíces Conectadas no tiene el dato solicitado, comunícalo al usuario.
 - Siempre menciona la fuente cuando uses información agrícola.
 

@@ -1,4 +1,8 @@
 import { ReactNode } from 'react';
+import { GameScorePayload } from '@/services/gameScores';
+import { useAuth } from '@/auth/AuthContext';
+import { AuthPrompt } from '../auth/AuthPrompt';
+import { ScoreReport } from './ScoreReport';
 import '../styles/GameResult.css';
 
 export interface StatItem {
@@ -21,7 +25,10 @@ interface GameResultProps {
   stats?: StatItem[];
   children?: ReactNode;
   onRestart: () => void;
+  onChangeDifficulty?: () => void;
   onQuit: () => void;
+  /** Si se envía, la partida se guarda en el backend y se muestra la clasificación. */
+  scoreReport?: GameScorePayload;
 }
 
 export function GameResult({
@@ -34,9 +41,14 @@ export function GameResult({
   stats,
   children,
   onRestart,
+  onChangeDifficulty,
   onQuit,
+  scoreReport,
 }: GameResultProps) {
   const percentage = maxScore ? Math.round((score / maxScore) * 100) : 0;
+  const { configured, status } = useAuth();
+  // Invitados con partida guardada: se ofrece la cuenta sin bloquear el juego.
+  const showAccountCta = Boolean(scoreReport) && configured && status === 'anonymous';
 
   return (
     <div className="game-result">
@@ -77,12 +89,26 @@ export function GameResult({
         </div>
       )}
 
+      {scoreReport && <ScoreReport payload={scoreReport} />}
+
+      {showAccountCta && (
+        <AuthPrompt
+          message="¿Quieres conservar tus resultados y competir en rankings personalizados?"
+          defaultChoice="buyer"
+        />
+      )}
+
       {children}
 
       <div className="result-buttons">
         <button className="btn-restart" onClick={onRestart}>
-          🔄 Jugar de nuevo
+          🔄 Jugar otra vez
         </button>
+        {onChangeDifficulty && (
+          <button className="btn-restart" onClick={onChangeDifficulty}>
+            🎚️ Cambiar dificultad
+          </button>
+        )}
         <button className="btn-quit" onClick={onQuit}>
           ← Volver
         </button>

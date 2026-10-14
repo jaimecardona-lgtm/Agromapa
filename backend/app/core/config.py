@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     FRONTEND_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     SUPABASE_URL: str = ""
+    # Clave pública (anon). Solo se usa para validar tokens de usuario contra Supabase Auth.
+    SUPABASE_ANON_KEY: str = ""
+    # Clave administrativa: solo backend. Nunca se envía al frontend.
     SUPABASE_SECRET_KEY: str = ""
 
     OPENROUTER_ENABLED: bool = False

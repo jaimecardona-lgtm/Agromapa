@@ -47,6 +47,7 @@ export function LearnGames() {
             Objetivo: Reconocer cultivos principales y comprender la producción agrícola
           </p>
           <button className="play-btn">Jugar</button>
+          <a className="standalone-link" href="/juegos/cosechas" onClick={(event) => event.stopPropagation()}>Abrir como juego independiente</a>
         </div>
 
         <div className="game-card" onClick={() => handleGameStart('eco-puzzle')}>
@@ -59,6 +60,7 @@ export function LearnGames() {
             Objetivo: Comprender las relaciones entre plantas, polinizadores, productores y productos
           </p>
           <button className="play-btn">Jugar</button>
+          <a className="standalone-link" href="/juegos/eco-puzzle" onClick={(event) => event.stopPropagation()}>Abrir como juego independiente</a>
         </div>
 
         <div className="game-card" onClick={() => handleGameStart('residuos')}>
@@ -71,6 +73,7 @@ export function LearnGames() {
             Objetivo: Aprender el manejo responsable de residuos rurales y agroambientales
           </p>
           <button className="play-btn">Jugar</button>
+          <a className="standalone-link" href="/juegos/cazadores-residuos" onClick={(event) => event.stopPropagation()}>Abrir como juego independiente</a>
         </div>
       </div>
     </div>

@@ -349,7 +349,7 @@ async def execute_tool(tool_name: str, arguments: dict) -> dict:
                     return {
                         "success": True,
                         "data": [],
-                        "message": f"No {product_name} currently available in registered farms. Consider checking EVA 2024 for historical agricultural capacity.",
+                        "message": f"No hay {product_name} disponible actualmente en fincas registradas en Raíces Conectadas. Esto NO significa disponibilidad vigente; EVA 2024 solo muestra producción histórica.",
                     }
                 return {"success": True, "data": result.model_dump() if hasattr(result, "model_dump") else result}
             except Exception as e:

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { GeoJsonObject, Point } from 'geojson';
+import { getAccessToken } from '@/auth/tokenStore';
 
 // Use same origin in production, localhost proxy in development
 const apiBase = import.meta.env.VITE_API_BASE_URL || '';
@@ -9,6 +10,15 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Solo se envía el access token de la sesión activa. Las lecturas públicas siguen sin sesión.
+apiClient.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export interface HealthStatus {
@@ -214,8 +224,8 @@ export const api = {
   },
   operational: {
     producers: {
-      create: (producer: Partial<Producer>) =>
-        apiClient.post<Producer>('/api/operational/producers', producer),
+      /** Vincula (o reactiva) el registro productor de la cuenta autenticada. No recibe body. */
+      linkMine: () => apiClient.post<Producer>('/api/operational/producers'),
       list: () => apiClient.get<Producer[]>('/api/operational/producers'),
       get: (id: string) => apiClient.get<Producer>(`/api/operational/producers/${id}`),
       update: (id: string, update: Partial<Producer>) =>
