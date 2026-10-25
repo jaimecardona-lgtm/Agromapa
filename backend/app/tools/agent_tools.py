@@ -1,12 +1,16 @@
 """Tools for the Raíces Conectadas master agent."""
 
 import logging
+from uuid import UUID
 
+from app.core.money import format_price_per_unit
 from app.repositories.agriculture_repository import AgricultureRepository
 from app.repositories.farm_repository import FarmRepository
 from app.repositories.geo_repository import GeoRepository
+from app.services.agent_sources import EVA_TOOLS, category_of
 from app.services.agriculture_service import get_municipality_agriculture
 from app.services.farm_service import get_municipality_farms
+from app.services.marketplace_service import get_public_producer_profile
 from app.services.territorial_service import get_departments, get_municipalities_by_department
 
 logger = logging.getLogger(__name__)
@@ -192,10 +196,27 @@ AGENT_TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_producer_profile",
+            "description": "Public profile of a producer: name, territory, farms, crops and current offers. Never contact data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "producer_id": {
+                        "type": "string",
+                        "description": "Public producer id (UUID) obtained from offers or farms",
+                    },
+                },
+                "required": ["producer_id"],
+            },
+        },
+    },
 ]
 
 
-async def execute_tool(tool_name: str, arguments: dict) -> dict:
+async def _execute_tool(tool_name: str, arguments: dict) -> dict:
     """Execute a tool and return the result."""
 
     try:
@@ -330,7 +351,11 @@ async def execute_tool(tool_name: str, arguments: dict) -> dict:
                 }
             except Exception as e:
                 logger.error(f"Failed to get current offers: {str(e)}")
-                return {"success": False, "error": "No operational offers found"}
+                return {
+                    "success": False,
+                    "error_kind": "unavailable",
+                    "error": "No pudimos consultar las ofertas en este momento.",
+                }
 
         elif tool_name == "search_available_product":
             product_name = arguments.get("product_name")
@@ -356,9 +381,62 @@ async def execute_tool(tool_name: str, arguments: dict) -> dict:
                 logger.error(f"Failed to search product: {str(e)}")
                 return {"success": False, "error": str(e)}
 
+        elif tool_name == "get_producer_profile":
+            try:
+                producer_id = UUID(str(arguments.get("producer_id", "")))
+            except ValueError:
+                return {"success": False, "error": "producer_id no válido"}
+            profile = await get_public_producer_profile(producer_id)
+            if profile is None:
+                return {
+                    "success": True,
+                    "data": None,
+                    "no_results": True,
+                    "message": "No encontré un productor público con ese identificador en Raíces Conectadas.",
+                }
+            return {"success": True, "data": profile.model_dump(mode="json")}
+
         else:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}
 
     except Exception as e:
         logger.error(f"Tool execution error ({tool_name}): {str(e)}")
         return {"success": False, "error": str(e)}
+
+
+OFFER_TOOLS = frozenset({"get_current_offers", "search_available_product"})
+
+
+def _safe_year(value) -> int:
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return 2024
+    return year if 1990 <= year <= 2100 else 2024
+
+
+def _prepare_offer_result(result: dict) -> None:
+    """Lo que ve el modelo: sin contacto privado, con precio ya formateado en COP y bandera de vacío."""
+    payload = result.get("data")
+    items = payload.get("data", []) if isinstance(payload, dict) else (payload or [])
+    clean = []
+    for item in items:
+        item = dict(item)
+        item.pop("producer_contact", None)
+        item.pop("producer_user_id", None)
+        item["price_label"] = format_price_per_unit(item.get("price_per_unit"), item.get("unit", ""))
+        clean.append(item)
+    result["data"] = {**payload, "data": clean} if isinstance(payload, dict) else clean
+    result["no_results"] = len(clean) == 0
+
+
+async def execute_tool(tool_name: str, arguments: dict) -> dict:
+    """Ejecuta una herramienta etiquetada por categoría de fuente."""
+    result = await _execute_tool(tool_name, arguments)
+    category = category_of(tool_name)
+    result["source_category"] = category.value if category else None
+    if tool_name in EVA_TOOLS:
+        result["eva_year"] = _safe_year(arguments.get("year"))
+    if tool_name in OFFER_TOOLS and result.get("success"):
+        _prepare_offer_result(result)
+    return result

@@ -1,0 +1,11 @@
+# El contexto de build es ./backend: sin secretos ni cachés en la imagen.
+.env
+.env.*
+.env.local
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.git

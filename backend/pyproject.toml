@@ -10,3 +10,9 @@ ignore = ["E501"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+# Por defecto la suite corre offline. Las pruebas de integración contra Supabase real
+# se ejecutan explícitamente con: pytest -m integration
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requiere Supabase real y red (credenciales en .env)",
+]

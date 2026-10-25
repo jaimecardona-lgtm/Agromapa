@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 OFFER_STATUSES = ("available", "harvested", "sold_out", "inactive", "historical")
 OfferStatus = Literal["available", "harvested", "sold_out", "inactive", "historical"]
@@ -102,14 +102,16 @@ class FarmResponse(BaseModel):
     active: bool
     created_at: datetime
     updated_at: datetime
+    illustrative_image_url: Optional[str] = None
+    illustrative_image_status: Optional[str] = None
 
 
 class FarmCropCreate(BaseModel):
     """Create a crop for the farm in the route (farm_id is not read from the body)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    crop_name: str
+    crop_name: str = Field(min_length=1, max_length=120)
     area_hectares: Optional[float] = Field(default=None, ge=0)
     description: Optional[str] = None
 
@@ -152,6 +154,13 @@ class ProductionOfferCreate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
 
+    @model_validator(mode="after")
+    def _availability_window_is_ordered(self):
+        start, end = self.availability_start, self.availability_end
+        if start is not None and end is not None and end < start:
+            raise ValueError("availability_end no puede ser anterior a availability_start")
+        return self
+
 
 class ProductionOfferUpdate(BaseModel):
     """Update a production offer."""
@@ -190,18 +199,47 @@ class ProductionOfferResponse(BaseModel):
     updated_at: datetime
 
 
-class CurrentOfferResponse(BaseModel):
-    """Current available offer (detailed with producer/farm info)."""
+class MyProductionOfferResponse(ProductionOfferResponse):
+    """Oferta propia con su contexto (cultivo y finca) para el listado del productor."""
 
-    model_config = ConfigDict(from_attributes=True)
+    farm_id: Optional[UUID] = None
+    farm_name: Optional[str] = None
+    crop_name: Optional[str] = None
+    crop_image_url: Optional[str] = None
+
+
+class PublicContact(BaseModel):
+    """Contacto comercial público. Existe solo si el productor activó contact_visible."""
+
+    public_phone: Optional[str] = None
+    public_email: Optional[str] = None
+    whatsapp: Optional[str] = None
+
+
+class PublicProducerResponse(BaseModel):
+    """Productor visible al público: nunca teléfono/email legacy ni datos de cuenta."""
+
+    id: UUID
+    display_name: str
+    verified: bool = False
+    description: Optional[str] = None
+    contact: Optional[PublicContact] = None
+    messaging_available: bool = False
+
+
+class CurrentOfferResponse(BaseModel):
+    """Current available offer (public: sin datos privados del productor)."""
 
     id: UUID
     farm_crop_id: UUID
     farm_id: UUID
     farm_name: str
+    producer_id: Optional[UUID] = None
+    crop_image_url: Optional[str] = None
     producer_name: str
-    producer_phone: Optional[str] = None
-    producer_email: Optional[str] = None
+    producer_verified: bool = False
+    producer_contact: Optional[PublicContact] = None
+    messaging_available: bool = False
     municipality_name: str
     municipality_code: Optional[str] = None
     crop_name: str

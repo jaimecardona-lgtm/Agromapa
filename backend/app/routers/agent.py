@@ -38,7 +38,7 @@ async def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
         logger.error(f"Agent request timeout: {str(e)}")
         raise HTTPException(
             status_code=504,
-            detail="Agent request timed out. Please try again.",
+            detail="El asistente tardó demasiado en responder. Intenta de nuevo en un momento.",
         )
 
     except httpx.HTTPStatusError as e:
@@ -56,7 +56,7 @@ async def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
         if status in (502, 503, 504):
             raise HTTPException(
                 status_code=502,
-                detail="Agent temporarily unavailable. Please try again.",
+                detail="El asistente no está disponible temporalmente. Puedes seguir explorando el mapa, Mercado y los recursos.",
             )
 
         # Model not found

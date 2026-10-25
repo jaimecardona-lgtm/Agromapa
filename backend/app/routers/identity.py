@@ -17,10 +17,12 @@ from app.schemas.identity import (
     Role,
     RolesResponse,
 )
-from app.schemas.operational import FarmResponse, ProductionOfferResponse
+from app.schemas.operational import FarmResponse, MyProductionOfferResponse
+from app.schemas.rankings import MyRankingResponse
 from app.services import identity_service
 from app.services.identity_service import IdentityConflictError
 from app.services.operational_service import list_my_farms, list_my_offers
+from app.services.rankings_service import get_my_ranking
 
 router = APIRouter(prefix="/me", tags=["identity"])
 
@@ -97,13 +99,20 @@ async def read_my_farms(user: AuthUser = Depends(require_role(ROLE_PRODUCER))):
     return await list_my_farms(user)
 
 
-@router.get("/offers", response_model=list[ProductionOfferResponse])
+@router.get("/offers", response_model=list[MyProductionOfferResponse])
 async def read_my_offers(user: AuthUser = Depends(require_role(ROLE_PRODUCER))):
     """Ofertas de todas las fincas del productor autenticado."""
     return await list_my_offers(user)
 
 
 # ========== GAME RESULTS ==========
+
+
+@router.get("/ranking", response_model=MyRankingResponse)
+async def read_my_ranking(user: AuthUser = Depends(require_user)):
+    """Mejores puntajes y posiciones del usuario. El territorio sale de su perfil, no del cliente."""
+    profile = await identity_service.ensure_profile(user)
+    return await get_my_ranking(user.id, profile)
 
 
 @router.get("/game-scores", response_model=list[GameScoreRecord])

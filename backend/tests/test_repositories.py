@@ -5,6 +5,10 @@ import pytest
 from app.repositories.data_source_repository import DataSourceRepository
 from app.repositories.geo_repository import GeoRepository
 
+# Estas pruebas consultan tablas reales de Supabase (data_sources y unidades geográficas).
+# No son unitarias: se excluyen de la suite estándar y se corren con `pytest -m integration`.
+pytestmark = pytest.mark.integration
+
 
 class TestDataSourceRepository:
     """Test data source repository."""

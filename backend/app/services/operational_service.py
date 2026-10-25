@@ -26,13 +26,17 @@ from app.schemas.operational import (
     FarmCropCreate,
     FarmCropResponse,
     FarmResponse,
+    MyProductionOfferResponse,
     ProducerResponse,
     ProducerUpdate,
     ProductionOfferCreate,
     ProductionOfferResponse,
     ProductionOfferUpdate,
+    PublicContact,
+    PublicProducerResponse,
 )
 from app.services import identity_service
+from app.services.crop_image_service import crop_image_urls
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +56,50 @@ async def get_linked_producer(user: AuthUser) -> ProducerResponse:
     return ProducerResponse(**row)
 
 
-async def get_producer(producer_id: UUID) -> Optional[ProducerResponse]:
-    """Get a producer by ID."""
-    result = await op_repo.get_producer_by_id(producer_id)
-    if result:
-        return ProducerResponse(**result)
-    return None
+PUBLIC_PRODUCER_COLUMNS = "id,name,user_id,active"
+
+
+def _public_contact(profile: Optional[dict]) -> Optional[PublicContact]:
+    """Contacto público: solo con contact_visible. Nunca teléfono/email legacy ni de auth."""
+    if not profile or not profile.get("contact_visible"):
+        return None
+    contact = PublicContact(
+        public_phone=profile.get("public_phone"),
+        public_email=profile.get("public_email"),
+        whatsapp=profile.get("whatsapp"),
+    )
+    if contact.public_phone is None and contact.public_email is None and contact.whatsapp is None:
+        return None
+    return contact
+
+
+def _build_public_producer(producer: dict, profile: Optional[dict]) -> PublicProducerResponse:
+    business_name = profile.get("business_name") if profile else None
+    return PublicProducerResponse(
+        id=UUID(str(producer["id"])),
+        display_name=business_name or producer["name"],
+        verified=bool(profile.get("verified")) if profile else False,
+        description=profile.get("description") if profile else None,
+        contact=_public_contact(profile),
+        messaging_available=producer.get("user_id") is not None,
+    )
+
+
+async def _build_public_producers(rows: list[dict]) -> list[PublicProducerResponse]:
+    user_ids = [str(row["user_id"]) for row in rows if row.get("user_id")]
+    profiles = await identity_repository.get_producer_profiles_by_users(user_ids)
+    return [
+        _build_public_producer(row, profiles.get(str(row["user_id"])) if row.get("user_id") else None)
+        for row in rows
+    ]
+
+
+async def get_producer(producer_id: UUID) -> Optional[PublicProducerResponse]:
+    """Productor público por ID. Inactivo o inexistente -> None."""
+    row = await op_repo.get_producer_by_id(producer_id, PUBLIC_PRODUCER_COLUMNS)
+    if not row or not row.get("active"):
+        return None
+    return (await _build_public_producers([row]))[0]
 
 
 async def update_producer(producer_id: UUID, update: ProducerUpdate, user: AuthUser) -> ProducerResponse:
@@ -68,10 +110,10 @@ async def update_producer(producer_id: UUID, update: ProducerUpdate, user: AuthU
     return ProducerResponse(**result)
 
 
-async def list_producers() -> List[ProducerResponse]:
-    """List all active producers."""
-    results = await op_repo.list_producers()
-    return [ProducerResponse(**r) for r in results]
+async def list_producers() -> List[PublicProducerResponse]:
+    """List all active producers, public view only."""
+    rows = await op_repo.list_producers(PUBLIC_PRODUCER_COLUMNS)
+    return await _build_public_producers(rows)
 
 
 # ========== FARMS ==========
@@ -156,8 +198,9 @@ async def update_farm_crop(farm_crop_id: UUID, update_data: dict, user: AuthUser
     return FarmCropResponse(**result)
 
 
-async def list_farm_crops(farm_id: UUID) -> List[FarmCropResponse]:
-    """List crops for a farm (public read)."""
+async def list_farm_crops(farm_id: UUID, user: AuthUser) -> List[FarmCropResponse]:
+    """List crops for a farm owned by the authenticated user (403 for another producer's farm)."""
+    await require_farm_owner(farm_id, user.id)
     results = await op_repo.list_farm_crops(farm_id)
     return [FarmCropResponse(**r) for r in results]
 
@@ -213,17 +256,81 @@ async def list_production_offers(farm_crop_id: UUID) -> List[ProductionOfferResp
     return [ProductionOfferResponse(**r) for r in results]
 
 
-async def list_my_offers(user: AuthUser) -> List[ProductionOfferResponse]:
+async def list_my_offers(user: AuthUser) -> List[MyProductionOfferResponse]:
     """Offers across all farms of the authenticated producer (includes non-available status)."""
     farms = await list_my_farms(user)
-    farm_ids = [str(farm.id) for farm in farms]
-    crops = await op_repo.select_in("farm_crops", "farm_id", farm_ids, "id")
-    crop_ids = [str(crop["id"]) for crop in crops]
-    offers = await op_repo.select_in("production_offers", "farm_crop_id", crop_ids)
-    return [ProductionOfferResponse(**row) for row in offers]
+    farm_names = {str(farm.id): farm.name for farm in farms}
+    crops = await op_repo.select_in("farm_crops", "farm_id", list(farm_names), "id,farm_id,crop_name")
+    crops_by_id = {str(crop["id"]): crop for crop in crops}
+    offers = await op_repo.select_in("production_offers", "farm_crop_id", list(crops_by_id))
+    images = await crop_image_urls(list(crops_by_id), repo=op_repo)
+    result = []
+    for row in offers:
+        crop = crops_by_id.get(str(row["farm_crop_id"]), {})
+        farm_id = str(crop.get("farm_id")) if crop.get("farm_id") else None
+        result.append(
+            MyProductionOfferResponse(
+                **row,
+                farm_id=UUID(farm_id) if farm_id else None,
+                farm_name=farm_names.get(farm_id) if farm_id else None,
+                crop_name=crop.get("crop_name"),
+                crop_image_url=images.get(str(row["farm_crop_id"])),
+            )
+        )
+    return result
 
 
 # ========== CURRENT OPERATIONAL OFFERS ==========
+
+
+def _to_current_offer(row: dict) -> CurrentOfferResponse:
+    """Oferta pública. La vista ya calcula el contacto; aquí solo se elige qué sale al público."""
+    return CurrentOfferResponse(
+        id=row["id"],
+        farm_crop_id=row["farm_crop_id"],
+        farm_id=row["farm_id"],
+        farm_name=row["farm_name"],
+        producer_id=row.get("producer_id"),
+        producer_name=row["producer_name"],
+        producer_verified=bool(row.get("producer_verified")),
+        producer_contact=_public_contact(
+            {
+                "contact_visible": row.get("producer_contact_visible"),
+                "public_phone": row.get("public_phone"),
+                "public_email": row.get("public_email"),
+                "whatsapp": row.get("whatsapp"),
+            }
+        ),
+        crop_image_url=row.get("crop_image_url"),
+        messaging_available=row.get("producer_user_id") is not None,
+        municipality_name=row["municipality_name"],
+        municipality_code=row.get("municipality_code"),
+        crop_name=row["crop_name"],
+        quantity=row["quantity"],
+        unit=row["unit"],
+        available_from=row.get("available_from"),
+        available_until=row.get("available_until"),
+        price_per_unit=row.get("price_per_unit"),
+        expected_harvest_at=row.get("expected_harvest_at"),
+        harvested_at=row.get("harvested_at"),
+        description=row.get("description"),
+        notes=row.get("notes"),
+        status=row["status"],
+        source=row.get("source", "Raíces Conectadas"),
+        data_type=row.get("data_type", "operational"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def get_current_offer(offer_id: UUID) -> Optional[CurrentOfferResponse]:
+    """Oferta vigente por ID (misma vista que el listado). None si no está vigente."""
+    row = await op_repo.get_row("current_operational_offers", offer_id, "*")
+    if row is None:
+        return None
+    images = await crop_image_urls([str(row["farm_crop_id"])], repo=op_repo)
+    row["crop_image_url"] = images.get(str(row["farm_crop_id"]))
+    return _to_current_offer(row)
 
 
 async def get_current_offers(
@@ -241,7 +348,10 @@ async def get_current_offers(
             farm_id=farm_id,
         )
 
-        offers = [CurrentOfferResponse(**r) for r in results]
+        images = await crop_image_urls([str(r["farm_crop_id"]) for r in results if r.get("farm_crop_id")], repo=op_repo)
+        for r in results:
+            r["crop_image_url"] = images.get(str(r.get("farm_crop_id")))
+        offers = [_to_current_offer(r) for r in results]
         return CurrentOfferListResponse(count=len(offers), data=offers)
     except Exception as e:
         logger.error(f"Failed to get current offers: {str(e)}")

@@ -13,7 +13,10 @@ from app.schemas.game_scores import (
     LeaderboardResponse,
     PlayerBestResponse,
     PlayerHistoryResponse,
+    RegisteredLeaderboardEntry,
+    RegisteredLeaderboardResponse,
 )
+from app.services.rankings_service import best_by_user, public_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,8 @@ repository = GameScoresRepository()
 MAX_LEADERBOARD_LIMIT = 50
 DEFAULT_LEADERBOARD_LIMIT = 10
 MAX_HISTORY_LIMIT = 20
+MAX_REGISTERED_CANDIDATES = 500
+DEFAULT_DISPLAY_NAME = "Usuario"
 
 
 async def save_score(payload: GameScoreCreate, user_id: Optional[UUID] = None) -> GameScoreRecord:
@@ -93,3 +98,66 @@ async def get_player_history(player_id: UUID, limit: int = MAX_HISTORY_LIMIT) ->
     rows = await repository.get_player_scores(player_id, limit)
     records = [GameScoreRecord(**row) for row in rows]
     return PlayerHistoryResponse(player_id=player_id, count=len(records), data=records)
+
+
+async def get_registered_leaderboard(
+    game_slug: str,
+    difficulty: Optional[str] = None,
+    country_code: Optional[str] = None,
+    department_code: Optional[str] = None,
+    municipality_code: Optional[str] = None,
+    limit: int = DEFAULT_LEADERBOARD_LIMIT,
+) -> RegisteredLeaderboardResponse:
+    """Mejor partida por cuenta registrada, con filtros territoriales opcionales.
+
+    El territorio se resuelve en la base (perfiles) antes de leer partidas: no hay tope de filas previo.
+    Solo expone display_name y códigos territoriales.
+    """
+    limit = max(1, min(limit, MAX_LEADERBOARD_LIMIT))
+    population = None
+    if department_code or municipality_code:
+        profiles_in_territory = await repository.list_territory_profiles(
+            department_code=department_code, municipality_code=municipality_code
+        )
+        population = [str(row["id"]) for row in profiles_in_territory]
+
+    rows = await repository.list_registered_scores(game_slug, population)
+    if difficulty:
+        rows = [row for row in rows if row.get("difficulty") == difficulty]
+    bests = best_by_user(rows)
+    ordered = sorted(bests, key=lambda key: (-bests[key]["score"], str(bests[key]["created_at"]), key))
+    profiles = await repository.get_profiles_by_ids(ordered)
+
+    entries: list[RegisteredLeaderboardEntry] = []
+    for key in ordered:
+        profile = profiles.get(key)
+        if profile is None:
+            continue
+        if country_code and profile.get("country_code") != country_code:
+            continue
+        best = bests[key]
+        entries.append(
+            RegisteredLeaderboardEntry(
+                rank=len(entries) + 1,
+                display_name=public_display_name(profile.get("display_name")),
+                country_code=profile.get("country_code") or "CO",
+                department_code=profile.get("department_code"),
+                municipality_code=profile.get("municipality_code"),
+                score=best["score"],
+                difficulty=best.get("difficulty"),
+                created_at=best["created_at"],
+            )
+        )
+        if len(entries) >= limit:
+            break
+
+    return RegisteredLeaderboardResponse(
+        game_slug=game_slug,
+        difficulty=difficulty,
+        country_code=country_code,
+        department_code=department_code,
+        municipality_code=municipality_code,
+        limit=limit,
+        count=len(entries),
+        data=entries,
+    )

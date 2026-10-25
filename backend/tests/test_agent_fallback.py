@@ -122,7 +122,7 @@ async def test_primary_401_no_fallback():
                 from app.services.agent_service import chat_with_agent
 
                 # Should raise error without attempting fallback
-                with pytest.raises(RuntimeError):
+                with pytest.raises(httpx.HTTPStatusError):
                     await chat_with_agent(request)
 
 
@@ -156,7 +156,7 @@ async def test_primary_402_no_fallback():
                 from app.services.agent_service import chat_with_agent
 
                 # Should raise error without attempting fallback
-                with pytest.raises(RuntimeError):
+                with pytest.raises(httpx.HTTPStatusError):
                     await chat_with_agent(request)
 
 
@@ -189,7 +189,7 @@ async def test_fallback_disabled():
                 from app.services.agent_service import chat_with_agent
 
                 # Should raise error without attempting fallback
-                with pytest.raises(RuntimeError):
+                with pytest.raises((asyncio.TimeoutError, httpx.TimeoutException)):
                     await chat_with_agent(request)
 
 

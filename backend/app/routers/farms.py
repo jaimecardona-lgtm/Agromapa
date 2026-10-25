@@ -2,14 +2,15 @@
 
 from fastapi import APIRouter, HTTPException
 
+from app.schemas.marketplace import PublicFarmsResponse
 from app.services.farm_service import get_municipality_farms
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
 
-@router.get("/municipalities/{municipality_code}")
+@router.get("/municipalities/{municipality_code}", response_model=PublicFarmsResponse)
 async def list_municipality_farms(municipality_code: str):
-    """Get farms for a municipality."""
+    """Fincas activas de un municipio: vista publica (sin contacto ni columnas legacy)."""
 
     farms = await get_municipality_farms(municipality_code)
 

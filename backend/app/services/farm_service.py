@@ -44,11 +44,8 @@ async def create_farm(
 
 
 async def get_municipality_farms(municipality_code: str) -> list[dict]:
-    """Get farms for a municipality."""
+    """Fincas publicas de un municipio (DTO explicito; sin columnas legacy de contacto)."""
+    from app.services.marketplace_service import get_public_farms_for_municipality
 
-    municipality = await geo_repo.get_by_dane_code("municipality", municipality_code)
-
-    if not municipality:
-        return []
-
-    return await farm_repo.get_by_municipality(municipality["id"])
+    farms = await get_public_farms_for_municipality(municipality_code)
+    return [farm.model_dump(mode="json") for farm in farms]

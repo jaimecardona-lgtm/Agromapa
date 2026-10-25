@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     CHAT_TOP_P: float = 0.8
     CHAT_MAX_TOKENS: int = 900
     CHAT_TIMEOUT_MS: int = 45000  # milliseconds
+    # Imágenes ilustrativas por cultivo. Vacío = generación deshabilitada (no hay proveedor verificado).
+    IMAGE_GENERATION_PROVIDER: str = ""
+    IMAGE_STORAGE_BUCKET: str = "crop-illustrations"
+    IMAGE_MAX_BYTES: int = 3_000_000
 
     class Config:
         env_file = ".env"

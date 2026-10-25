@@ -11,8 +11,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import ROLE_PRODUCER, AuthUser, require_role, require_user
+from app.schemas.crop_images import CropIllustrationResponse
 from app.schemas.operational import (
     CurrentOfferListResponse,
+    CurrentOfferResponse,
     FarmCreate,
     FarmCropCreate,
     FarmCropResponse,
@@ -24,11 +26,15 @@ from app.schemas.operational import (
     ProductionOfferCreate,
     ProductionOfferResponse,
     ProductionOfferUpdate,
+    PublicProducerResponse,
 )
+from app.services.crop_image_service import ImageGenerationDisabled, generate_for_crop
+from app.services.image_providers import DISABLED_MESSAGE
 from app.services.operational_service import (
     create_farm,
     create_farm_crop,
     create_production_offer,
+    get_current_offer,
     get_current_offers,
     get_farm,
     get_farm_crop,
@@ -59,15 +65,15 @@ async def link_my_producer(user: AuthUser = Depends(require_user)):
     return await get_linked_producer(user)
 
 
-@router.get("/producers", response_model=list[ProducerResponse])
+@router.get("/producers", response_model=list[PublicProducerResponse])
 async def list_all_producers():
-    """List all active producers (public read)."""
+    """List all active producers (public view: sin teléfono ni email legacy)."""
     return await list_producers()
 
 
-@router.get("/producers/{producer_id}", response_model=ProducerResponse)
+@router.get("/producers/{producer_id}", response_model=PublicProducerResponse)
 async def get_producer_details(producer_id: UUID):
-    """Get producer details (public read)."""
+    """Get a producer's public view (contacto solo si contact_visible)."""
     result = await get_producer(producer_id)
     if not result:
         raise HTTPException(status_code=404, detail="Producer not found")
@@ -137,10 +143,24 @@ async def create_new_farm_crop(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/farm-crops/{farm_crop_id}/illustration", response_model=CropIllustrationResponse)
+async def generate_crop_illustration(farm_crop_id: UUID, user: AuthUser = ProducerUser):
+    """Imagen ilustrativa del cultivo (IA). Solo el dueño. Una vez ready no se regenera."""
+    try:
+        return await generate_for_crop(farm_crop_id, user)
+    except ImageGenerationDisabled:
+        raise HTTPException(status_code=503, detail=DISABLED_MESSAGE)
+
+
 @router.get("/farms/{farm_id}/crops", response_model=list[FarmCropResponse])
-async def list_farm_crops_endpoint(farm_id: UUID):
-    """List crops for a farm (public read)."""
-    return await list_farm_crops(farm_id)
+async def list_farm_crops_endpoint(farm_id: UUID, user: AuthUser = ProducerUser):
+    """List crops for a farm owned by the authenticated producer."""
+    try:
+        return await list_farm_crops(farm_id, user)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="No pudimos cargar los cultivos en este momento.")
 
 
 @router.get("/farm-crops/{farm_crop_id}", response_model=FarmCropResponse)
@@ -208,6 +228,15 @@ async def update_offer_details(
 
 
 # ========== CURRENT OFFERS (public) ==========
+
+
+@router.get("/current-offer/{offer_id}", response_model=CurrentOfferResponse)
+async def get_current_offer_details(offer_id: UUID):
+    """Detalle público de una oferta vigente. 404 si no está vigente."""
+    result = await get_current_offer(offer_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Oferta no vigente")
+    return result
 
 
 @router.get("/current-offer", response_model=CurrentOfferListResponse)

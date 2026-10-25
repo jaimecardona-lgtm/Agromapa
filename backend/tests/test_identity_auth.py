@@ -3,6 +3,7 @@
 Supabase Auth and the identity repository are mocked. No real Auth is needed.
 """
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -215,6 +216,17 @@ class _FakeResponse:
         return self._payload
 
 
+@contextmanager
+def _inject(client):
+    """Cliente simulado en el cliente compartido de auth; se restaura al salir (sin red)."""
+    previous = auth_module._auth_client
+    auth_module._auth_client = client
+    try:
+        yield
+    finally:
+        auth_module._auth_client = previous
+
+
 class _FakeClient:
     def __init__(self, response=None, error=None):
         self._response = response
@@ -247,7 +259,7 @@ async def test_verify_returns_user_from_supabase_response(configured_supabase):
         "user_metadata": {"display_name": "  Ana  "},
     }
     client = _FakeClient(response=_FakeResponse(200, payload))
-    with patch.object(auth_module.httpx, "AsyncClient", lambda **_: client):
+    with _inject(client):
         user = await verify_access_token(TOKEN)
     assert user.id == USER_ID
     assert user.email == "ana@example.com"
@@ -256,7 +268,7 @@ async def test_verify_returns_user_from_supabase_response(configured_supabase):
 
 async def test_verify_rejects_token_refused_by_supabase(configured_supabase):
     client = _FakeClient(response=_FakeResponse(401))
-    with patch.object(auth_module.httpx, "AsyncClient", lambda **_: client):
+    with _inject(client):
         with pytest.raises(AuthInvalidToken):
             await verify_access_token(TOKEN)
 
@@ -265,7 +277,7 @@ async def test_verify_handles_network_failure(configured_supabase):
     import httpx
 
     client = _FakeClient(error=httpx.ConnectError("sin red"))
-    with patch.object(auth_module.httpx, "AsyncClient", lambda **_: client):
+    with _inject(client):
         with pytest.raises(AuthServiceUnavailable):
             await verify_access_token(TOKEN)
 

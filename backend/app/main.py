@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -6,21 +7,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core.auth import close_auth_client
 from app.core.config import settings
 from app.routers import (
     agent,
     agriculture,
+    conversations,
     farms,
     game_scores,
     health,
     identity,
+    marketplace,
     operational,
+    rankings,
     territories,
 )
 
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    await close_auth_client()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title=settings.APP_NAME,
     description="Plataforma de biodiversidad, territorio y bioeconomía con mapeo digital e inteligencia artificial",
     version="0.2.0",
@@ -44,9 +56,12 @@ app.include_router(territories.router, prefix=api_v1_prefix)
 app.include_router(agriculture.router, prefix=api_v1_prefix)
 app.include_router(farms.router, prefix=api_v1_prefix)
 app.include_router(operational.router, prefix=api_v1_prefix)
+app.include_router(marketplace.router, prefix=api_v1_prefix)
+app.include_router(rankings.router, prefix=api_v1_prefix)
 app.include_router(agent.router, prefix=api_v1_prefix)
 app.include_router(game_scores.router, prefix=api_v1_prefix)
 app.include_router(identity.router, prefix=api_v1_prefix)
+app.include_router(conversations.router, prefix=api_v1_prefix)
 
 logger.info(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
 

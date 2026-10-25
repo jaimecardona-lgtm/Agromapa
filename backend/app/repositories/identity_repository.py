@@ -94,6 +94,19 @@ class IdentityRepository:
         )
         return response.data[0] if response.data else None
 
+    async def get_producer_profiles_by_users(self, user_ids: list[str]) -> dict[str, dict]:
+        """Perfiles públicos de productor indexados por user_id. Lista vacía -> sin consulta."""
+        if not user_ids:
+            return {}
+        response = (
+            self._client()
+            .table("producer_profiles")
+            .select("user_id,business_name,description,public_phone,public_email,whatsapp,contact_visible,verified")
+            .in_("user_id", user_ids)
+            .execute()
+        )
+        return {str(row["user_id"]): row for row in (response.data or [])}
+
     async def ensure_buyer_profile(self, user_id: UUID) -> None:
         self._client().table("buyer_profiles").upsert(
             {"user_id": str(user_id)}, on_conflict="user_id", ignore_duplicates=True

@@ -15,6 +15,7 @@ from app.schemas.game_scores import (
     LeaderboardResponse,
     PlayerBestResponse,
     PlayerHistoryResponse,
+    RegisteredLeaderboardResponse,
 )
 from app.services.game_scores_service import (
     DEFAULT_LEADERBOARD_LIMIT,
@@ -23,6 +24,7 @@ from app.services.game_scores_service import (
     get_leaderboard,
     get_player_best,
     get_player_history,
+    get_registered_leaderboard,
     save_score,
 )
 
@@ -60,6 +62,24 @@ async def read_leaderboard(
     """Top de partidas de un juego, opcionalmente filtrado por dificultad."""
     try:
         return await get_leaderboard(game_slug, difficulty, limit)
+    except Exception as exc:
+        raise _unavailable(exc) from exc
+
+
+@router.get("/leaderboard/{game_slug}/registered", response_model=RegisteredLeaderboardResponse)
+async def read_registered_leaderboard(
+    game_slug: GameSlug,
+    difficulty: Optional[Difficulty] = None,
+    country_code: Optional[str] = Query(default=None, pattern=r"^[A-Z]{2}$"),
+    department_code: Optional[str] = Query(default=None, pattern=r"^[0-9]{2}$"),
+    municipality_code: Optional[str] = Query(default=None, pattern=r"^[0-9]{5}$"),
+    limit: int = Query(default=DEFAULT_LEADERBOARD_LIMIT, ge=1, le=MAX_LEADERBOARD_LIMIT),
+):
+    """Ranking de cuentas registradas (nombre público y territorio). Sin email. Filtros opcionales."""
+    try:
+        return await get_registered_leaderboard(
+            game_slug, difficulty, country_code, department_code, municipality_code, limit
+        )
     except Exception as exc:
         raise _unavailable(exc) from exc
 

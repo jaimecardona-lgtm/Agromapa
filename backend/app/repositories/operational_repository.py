@@ -9,6 +9,14 @@ from app.services.supabase_service import supabase_service
 logger = logging.getLogger(__name__)
 
 
+# Columnas públicas explícitas: el marketplace nunca recibe filas completas.
+PUBLIC_FARM_COLUMNS = "id,name,description,area_ha,latitude,longitude,municipality_id,producer_id,active"
+PUBLIC_OFFER_COLUMNS = (
+    "id,farm_id,farm_name,municipality_name,municipality_code,crop_name,quantity,unit,"
+    "price_per_unit,available_from,available_until,status,description,producer_id,farm_crop_id,updated_at"
+)
+
+
 class OperationalRepository:
     """Repository for operational model: producers, farms, crops, offers."""
 
@@ -52,12 +60,12 @@ class OperationalRepository:
             logger.error(f"Failed to create producer: {str(e)}")
             raise
 
-    async def get_producer_by_id(self, producer_id: UUID) -> Optional[dict]:
-        """Get producer by ID."""
+    async def get_producer_by_id(self, producer_id: UUID, columns: str = "*") -> Optional[dict]:
+        """Get producer by ID. Public callers pass explicit columns (never phone/email)."""
         client = self._get_client()
 
         try:
-            response = client.table("producers").select("*").eq("id", str(producer_id)).single().execute()
+            response = client.table("producers").select(columns).eq("id", str(producer_id)).single().execute()
             return response.data
         except Exception:
             logger.debug(f"Producer not found: {producer_id}")
@@ -74,12 +82,12 @@ class OperationalRepository:
             logger.error(f"Failed to update producer {producer_id}: {str(e)}")
             raise
 
-    async def list_producers(self) -> list[dict]:
-        """List all active producers."""
+    async def list_producers(self, columns: str = "*") -> list[dict]:
+        """List all active producers. Public callers pass explicit columns (never phone/email)."""
         client = self._get_client()
 
         try:
-            response = client.table("producers").select("*").eq("active", True).execute()
+            response = client.table("producers").select(columns).eq("active", True).execute()
             return response.data
         except Exception as e:
             logger.error(f"Failed to list producers: {str(e)}")
@@ -260,7 +268,7 @@ class OperationalRepository:
             return None
 
     async def list_farm_crops(self, farm_id: UUID) -> list[dict]:
-        """List crops for a farm."""
+        """List crops for a farm, oldest first. Errors propagate: never an empty list by accident."""
         client = self._get_client()
 
         try:
@@ -268,13 +276,13 @@ class OperationalRepository:
                 client.table("farm_crops")
                 .select("*")
                 .eq("farm_id", str(farm_id))
-                .eq("active", True)
+                .order("created_at")
                 .execute()
             )
-            return response.data
+            return response.data or []
         except Exception as e:
-            logger.error(f"Failed to list farm crops: {str(e)}")
-            return []
+            logger.error("Failed to list farm crops for farm %s: %s", farm_id, e)
+            raise
 
     async def update_farm_crop(self, farm_crop_id: UUID, update_data: dict) -> dict:
         """Update a farm crop."""
@@ -389,6 +397,9 @@ class OperationalRepository:
             if crop_name:
                 query = query.ilike("crop_name", f"%{crop_name}%")
 
+            if department_code:
+                query = query.eq("department_code", department_code)
+
             if farm_id:
                 query = query.eq("farm_id", str(farm_id))
 
@@ -398,7 +409,62 @@ class OperationalRepository:
             logger.error(f"Failed to get current offers: {str(e)}")
             return []
 
+    async def list_public_farms(
+        self, municipality_id: Optional[str] = None, producer_id: Optional[UUID] = None
+    ) -> list[dict]:
+        """Fincas activas con columnas públicas explícitas. Nunca select(*): la tabla tiene columnas legacy de contacto.
+
+        Los errores se propagan: un fallo no se confunde con "no hay fincas".
+        """
+        query = self._get_client().table("farms").select(PUBLIC_FARM_COLUMNS).eq("active", True)
+        if municipality_id:
+            query = query.eq("municipality_id", str(municipality_id))
+        if producer_id:
+            query = query.eq("producer_id", str(producer_id))
+        response = query.order("name").execute()
+        return response.data or []
+
+    async def list_active_offers_by_producer(self, producer_id: UUID) -> list[dict]:
+        """Ofertas vigentes de un productor desde la vista pública, con columnas explícitas. Errores propagados."""
+        response = (
+            self._get_client()
+            .table("current_operational_offers")
+            .select(PUBLIC_OFFER_COLUMNS)
+            .eq("producer_id", str(producer_id))
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        return response.data or []
+
     # ========== GENERIC (ownership and listings) ==========
+
+    async def claim_crop_illustration(self, farm_crop_id: UUID) -> Optional[dict]:
+        """Marca 'pending' solo si el cultivo está en none o failed. Devuelve la fila o None si ya estaba en curso."""
+        response = (
+            self._get_client()
+            .table("farm_crops")
+            .update({"illustrative_image_status": "pending"})
+            .eq("id", str(farm_crop_id))
+            .in_("illustrative_image_status", ["none", "failed"])
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def set_crop_illustration(self, farm_crop_id: UUID, fields: dict) -> None:
+        self._get_client().table("farm_crops").update(fields).eq("id", str(farm_crop_id)).execute()
+
+    async def select_crop_image_rows(self, crop_ids: list[str]) -> list[dict]:
+        """Estado e imagen de cultivos por id. Lista vacía -> sin consulta."""
+        if not crop_ids:
+            return []
+        response = (
+            self._get_client()
+            .table("farm_crops")
+            .select("id,illustrative_image_url,illustrative_image_status")
+            .in_("id", crop_ids)
+            .execute()
+        )
+        return response.data or []
 
     async def get_row(self, table: str, row_id: UUID | str, columns: str = "*") -> Optional[dict]:
         """Fila por ID o None. Usa limit(1) para no lanzar excepciones por filas ausentes."""

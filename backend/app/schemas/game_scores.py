@@ -168,3 +168,27 @@ class PlayerHistoryResponse(BaseModel):
     player_id: UUID
     count: int
     data: list[GameScoreRecord]
+
+
+class RegisteredLeaderboardEntry(BaseModel):
+    """Entrada del ranking de cuentas registradas. Solo datos públicos: nunca email."""
+
+    rank: int
+    display_name: str
+    country_code: str
+    department_code: Optional[str] = None
+    municipality_code: Optional[str] = None
+    score: int
+    difficulty: Optional[str] = None
+    created_at: datetime
+
+
+class RegisteredLeaderboardResponse(BaseModel):
+    game_slug: GameSlug
+    difficulty: Optional[Difficulty] = None
+    country_code: Optional[str] = None
+    department_code: Optional[str] = None
+    municipality_code: Optional[str] = None
+    limit: int
+    count: int
+    data: list[RegisteredLeaderboardEntry]
