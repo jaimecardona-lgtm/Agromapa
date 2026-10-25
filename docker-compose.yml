@@ -1,4 +1,10 @@
-version: '3.8'
+# Compose production-like: levanta los artefactos finales (imagen del backend y build estático del frontend).
+# Desarrollo local sigue siendo: uvicorn (backend) y npm run dev (frontend), sin Docker.
+#
+# Supabase es EXTERNO: no hay PostgreSQL en este compose. Las migraciones se aplican manualmente en Supabase.
+#
+# Secretos: nunca literales aquí. El backend lee backend/.env (opcional, no se copia a la imagen).
+# El frontend solo recibe VITE_* como build args desde el .env de la raíz (claves públicas).
 
 services:
   backend:
@@ -6,43 +12,38 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: agromapa-backend
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       APP_NAME: Raíces Conectadas API
-      APP_ENV: development
-      APP_DEBUG: 'true'
+      APP_ENV: production
+      APP_DEBUG: 'false'
       API_V1_PREFIX: /api
+      # Orígenes del navegador (el frontend servido en 5173 y el dev server 5173/3000).
       FRONTEND_ORIGINS: http://localhost:5173,http://localhost:3000
-      # Supabase configuration (leave empty for development without remote DB)
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
-      OPENROUTER_ENABLED: 'false'
+      OPENROUTER_ENABLED: ${OPENROUTER_ENABLED:-false}
     ports:
       - '8000:8000'
-    volumes:
-      - ./backend:/app
-    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:8000/api/health']
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # URL pública del backend tal como la ve el NAVEGADOR (no el nombre interno del contenedor).
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
     container_name: agromapa-frontend
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000
-      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
-      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
     ports:
       - '5173:5173'
-    depends_on:
-      backend:
-        condition: service_healthy
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    command: npm run dev
+    restart: unless-stopped
+    # Sin depends_on: el frontend estático no llama al backend al arrancar; el navegador sí.

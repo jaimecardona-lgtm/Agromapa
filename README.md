@@ -61,9 +61,9 @@ source venv/bin/activate  # o venv\Scripts\activate en Windows
 # Instalar dependencias
 pip install -r requirements.txt
 
-# Crear archivo .env local
-cp .env.example .env.local
-# Editar .env.local con tus credenciales
+# Crear archivo .env local (el backend lee .env, no .env.local)
+cp .env.example .env
+# Editar .env con tus credenciales
 
 # Ejecutar servidor
 python -m uvicorn app.main:app --reload
@@ -77,31 +77,51 @@ python -m uvicorn app.main:app --reload
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-### Backend (`.env.local`)
+### Backend (`.env`)
 ```
 APP_ENV=development
 APP_DEBUG=true
 API_V1_PREFIX=/api
 FRONTEND_ORIGINS=http://localhost:5173,http://localhost:3000
 SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SECRET_KEY=your-secret-key
+# Opcional: agente IA
 OPENROUTER_ENABLED=false
-OPENROUTER_API_KEY
+OPENROUTER_API_KEY=your-openrouter-key
+# Opcional: imágenes IA (vacío = deshabilitadas)
+IMAGE_GENERATION_PROVIDER=
+IMAGE_STORAGE_BUCKET=crop-illustrations
 ```
 
-## Ejecución con Docker Compose
+## Desarrollo local vs Docker Compose
+
+**Desarrollo local (recomendado para programar):** backend con `uvicorn` y frontend con `npm run dev`, como se describe arriba.
+
+**Docker Compose (production-like):** levanta los artefactos finales: la imagen del backend (uvicorn sin `--reload`) y el build estático del frontend servido con `serve` en modo SPA. No usa Vite dev server.
+
+- **Supabase es externo.** Compose NO crea PostgreSQL local. La base de datos es el proyecto de Supabase configurado en `backend/.env`.
+- **Migraciones manuales.** Las migraciones de `supabase/migrations/` se aplican a mano en Supabase, en orden (001 a 015). Ver estado abajo.
+- **Secretos:** `backend/.env` (opcional) se carga en el backend en tiempo de ejecución y no se copia a la imagen. El frontend solo recibe `VITE_*` (públicas) como argumentos de build.
 
 ```bash
-# Crear .env local en raíz (opcional)
-cp backend/.env.example .env.local
+# Variables del frontend (build) y de Compose: archivo .env en la raíz (opcional)
+#   VITE_API_BASE_URL=http://localhost:8000
+#   VITE_SUPABASE_URL=...        (URL pública de Supabase)
+#   VITE_SUPABASE_ANON_KEY=...   (clave anon pública)
 
-# Iniciar stack completo
-docker-compose up
+docker compose build
+docker compose up -d
 
 # Frontend: http://localhost:5173
-# Backend: http://localhost:8000
-# PostgreSQL: localhost:5432
+# Backend:  http://localhost:8000/api/health
 ```
+
+**Estado de migraciones:** 009 a 013 aplicadas. **014 (imágenes ilustrativas) pendiente y opcional.** **015 (seguridad del RPC geo) pendiente de aplicación manual.** Sin 014 la app funciona; las imágenes muestran placeholder.
+
+**Opcionales:**
+- **OpenRouter (agente IA):** `OPENROUTER_ENABLED=true` y `OPENROUTER_API_KEY` en `backend/.env`. Sin ellos el agente responde 503 y el resto de la app funciona.
+- **Imágenes IA de cultivos:** requieren proveedor (`IMAGE_GENERATION_PROVIDER`), bucket público `crop-illustrations` en Supabase Storage y la migración 014. Sin ellos, placeholder.
 
 ## Pruebas
 
