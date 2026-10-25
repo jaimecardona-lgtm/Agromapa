@@ -65,6 +65,31 @@
   gap: 12px;
 }
 
+/* Fila de conversación: botón con aspecto de enlace (sin estilo nativo de botón). */
+.account-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.account-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
 .account-roles li {
   display: flex;
   justify-content: space-between;
@@ -111,4 +136,29 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.account-indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.account-indicators div {
+  background: #f4f8f5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.account-indicators dt {
+  font-size: 0.85rem;
+  color: #55655c;
+}
+
+.account-indicators dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
 }

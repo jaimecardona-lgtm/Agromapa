@@ -3,6 +3,7 @@ import { findGame } from '../games/catalog';
 import type { GameSlug } from '@/services/gameScores';
 import { AccountMenu } from '../auth/AccountMenu';
 import { PortalPage } from './PortalPage';
+import { RankingPage } from '../ranking/RankingPage';
 import { PORTAL_PATH, navigateTo, parsePublicRoute, usePathname } from './publicRoutes';
 import '../styles/PublicGames.css';
 
@@ -39,7 +40,7 @@ export function PublicGamesApp() {
         </div>
       </header>
 
-      {route.kind === 'game' ? <GameStage slug={route.slug} /> : <PortalPage />}
+      {route.kind === 'game' ? <GameStage slug={route.slug} /> : route.kind === 'ranking' ? <RankingPage /> : <PortalPage />}
     </div>
   );
 }

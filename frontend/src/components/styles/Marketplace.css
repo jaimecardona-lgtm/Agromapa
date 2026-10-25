@@ -1,0 +1,241 @@
+/* Mercado público (/mercado, /mercado/oferta/{id}). Mobile first; sin scroll horizontal en 360px. */
+.market-page {
+  min-height: 100vh;
+  background: var(--auth-prompt-bg, #f1f7f3);
+  color: var(--auth-text, #1d2b24);
+  /* clip (no hidden) evita que la página se convierta en contenedor de scroll:
+     así los elementos sticky (compositor del chat) se fijan al viewport. */
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+.market-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.market-nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.market-nav a,
+.market-back a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  font-weight: 600;
+}
+
+.market-main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.market-intro h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+}
+
+.market-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  background: var(--auth-surface, #ffffff);
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.market-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.market-field span {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.market-field input,
+.market-field select {
+  min-height: 44px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.market-field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.market-field-check input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+}
+
+.market-count {
+  margin: 0;
+  font-weight: 600;
+}
+
+.market-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.market-card {
+  min-width: 0;
+}
+
+.market-card article,
+.offer-detail {
+  background: var(--auth-surface, #ffffff);
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 12px;
+  padding: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.market-card h3,
+.offer-detail h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.market-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.market-quantity {
+  margin: 6px 0 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.market-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.market-meta div {
+  min-width: 0;
+}
+
+.market-meta dt {
+  font-size: 0.8rem;
+  color: #55655c;
+}
+
+.market-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.market-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e3f1e7;
+  color: #1f5a33;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.market-action,
+.offer-cta .auth-primary,
+.offer-cta .auth-secondary {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.market-action {
+  background: var(--auth-primary-bg, #1f6b3a);
+  color: #ffffff;
+  border: none;
+}
+
+.offer-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.offer-detail .account-section {
+  box-shadow: none;
+}
+
+.offer-contact {
+  margin: 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.offer-cta p {
+  margin: 0 0 12px;
+}
+
+@media (min-width: 600px) {
+  .market-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .market-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .market-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

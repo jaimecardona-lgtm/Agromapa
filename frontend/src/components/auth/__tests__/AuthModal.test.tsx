@@ -125,3 +125,73 @@ describe('AuthModal - without configured auth', () => {
     expect(screen.getByRole('button', { name: 'Iniciar sesión' })).toBeDisabled();
   });
 });
+
+describe('AuthModal - capa y montaje', () => {
+  function renderOpenState(open: boolean) {
+    const value: AuthContextValue = {
+      ...defaultAuthValue,
+      configured: true,
+      signIn: vi.fn(async () => ({ ok: true as const })),
+      signUp: vi.fn(async () => ({ ok: true as const })),
+    };
+    const onClose = vi.fn();
+    // Simula el header de la app: el modal debe quedar fuera de este contenedor.
+    const { container, rerender, unmount } = render(
+      <AuthContext.Provider value={value}>
+        <div className="app-header">
+          <AuthModal open={open} onClose={onClose} initialMode="login" />
+        </div>
+      </AuthContext.Provider>,
+    );
+    return {
+      container,
+      onClose,
+      unmount,
+      rerender: (nextOpen: boolean) =>
+        rerender(
+          <AuthContext.Provider value={value}>
+            <div className="app-header">
+              <AuthModal open={nextOpen} onClose={onClose} initialMode="login" />
+            </div>
+          </AuthContext.Provider>,
+        ),
+    };
+  }
+
+  it('no renderiza el dialog cuando open es false', () => {
+    renderOpenState(false);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.querySelector('.auth-backdrop')).toBeNull();
+  });
+
+  it('se monta en document.body, fuera del contenedor del header', () => {
+    const { container } = renderOpenState(true);
+
+    const dialog = screen.getByRole('dialog', { name: 'Iniciar sesión' });
+    expect(dialog.closest('.auth-backdrop')?.parentElement).toBe(document.body);
+    expect(container.contains(dialog)).toBe(false);
+  });
+
+  it('el botón cerrar y el fondo llaman a onClose', async () => {
+    const { onClose } = renderOpenState(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(document.querySelector('.auth-backdrop') as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('bloquea el scroll del body mientras está abierto y lo restaura al cerrar', () => {
+    const previous = document.body.style.overflow;
+    const { rerender, unmount } = renderOpenState(true);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    rerender(false);
+    expect(document.body.style.overflow).toBe(previous);
+
+    unmount();
+    expect(document.body.style.overflow).toBe(previous);
+  });
+});

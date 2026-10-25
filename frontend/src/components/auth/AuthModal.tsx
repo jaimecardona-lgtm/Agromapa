@@ -1,6 +1,9 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/auth/AuthContext';
+import { postSignupPath, takeReturnPath } from '@/auth/authRoutes';
 import { type RoleChoice } from '@/auth/roles';
+import { navigateTo } from '@/components/public/publicRoutes';
 import { RoleSelector } from './RoleSelector';
 import '../styles/Auth.css';
 
@@ -14,6 +17,11 @@ interface AuthModalProps {
   /** Explica por qué se pide la cuenta (p. ej. registrar una finca). */
   message?: string;
   onAuthenticated?: () => void;
+  /**
+   * Tras entrar o registrarse, lleva a la ruta de regreso o al panel del rol
+   * (comprador -> /mercado; resto -> /cuenta). Solo lo activan flujos de negocio.
+   */
+  redirectAfterAuth?: boolean;
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -25,6 +33,7 @@ export function AuthModal({
   defaultChoice = 'producer',
   message,
   onAuthenticated,
+  redirectAfterAuth = false,
 }: AuthModalProps) {
   const { configured, signIn, signUp } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -46,6 +55,16 @@ export function AuthModal({
     setNotice(null);
     setPassword('');
   }, [open, initialMode, defaultChoice]);
+
+  // Mientras el modal está abierto la página no se desplaza por debajo. Se restaura al cerrar o desmontar.
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -84,6 +103,11 @@ export function AuthModal({
         setNotice('Te enviamos un correo para confirmar tu cuenta. Después podrás iniciar sesión.');
         return;
       }
+      if (redirectAfterAuth) {
+        const destination = isSignup ? postSignupPath(choice) : takeReturnPath();
+        const current = `${window.location.pathname}${window.location.search}`;
+        if (destination && destination !== current) navigateTo(destination);
+      }
       onAuthenticated?.();
       onClose();
     } finally {
@@ -91,7 +115,9 @@ export function AuthModal({
     }
   }
 
-  return (
+  // Portal a document.body: el modal no hereda el contexto de apilamiento del header
+  // (z-index 10) ni de la app, y así queda por encima de Leaflet y del resto de la página.
+  return createPortal(
     <div className="auth-backdrop" onClick={onClose}>
       <div
         className="auth-modal"
@@ -180,6 +206,7 @@ export function AuthModal({
           {isSignup ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Créala'}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

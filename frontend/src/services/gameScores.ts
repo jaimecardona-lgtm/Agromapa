@@ -46,6 +46,40 @@ export interface LeaderboardEntry {
 
 export type SubmitResult = { ok: true; saved: SavedScore } | { ok: false; reason: string };
 
+/** Partida terminada que no se pudo guardar por sesión expirada. Vive en sessionStorage, nunca se reenvía sola. */
+export interface PendingScore {
+  payload: GameScorePayload;
+  playerId: string;
+  alias: string;
+}
+
+export const PENDING_SCORE_KEY = 'raices-pending-score';
+
+export function savePendingScore(pending: PendingScore): void {
+  try {
+    window.sessionStorage.setItem(PENDING_SCORE_KEY, JSON.stringify(pending));
+  } catch {
+    // Sin sessionStorage el resultado sigue en la pantalla mientras no se recargue.
+  }
+}
+
+export function readPendingScore(): PendingScore | null {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_SCORE_KEY);
+    return raw ? (JSON.parse(raw) as PendingScore) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingScore(): void {
+  try {
+    window.sessionStorage.removeItem(PENDING_SCORE_KEY);
+  } catch {
+    // Nada que limpiar si el almacenamiento no está disponible.
+  }
+}
+
 // Respaldo en memoria si localStorage no está disponible (modo privado, bloqueos).
 let memoryPlayerId: string | null = null;
 let memoryAlias: string | null = null;
@@ -156,16 +190,24 @@ export async function submitGameScore(
   payload: GameScorePayload,
   identity: { playerId?: string; alias?: string } = {},
 ): Promise<SubmitResult> {
+  const playerId = identity.playerId ?? getPlayerId();
+  const alias = identity.alias ?? getPlayerAlias();
   try {
     const response = await apiClient.post<SavedScore>('/api/games/scores', {
       ...payload,
-      player_id: identity.playerId ?? getPlayerId(),
-      player_alias: identity.alias ?? getPlayerAlias(),
+      player_id: playerId,
+      player_alias: alias,
     });
     rememberOwnScore(response.data.id);
+    clearPendingScore();
     return { ok: true, saved: response.data };
   } catch (error) {
     const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 401) {
+      // La sesión venció: se conserva la partida con su mismo player_id para reintentar tras iniciar sesión.
+      savePendingScore({ payload, playerId, alias });
+      return { ok: false, reason: 'session_expired' };
+    }
     return { ok: false, reason: status ? `HTTP ${status}` : 'network' };
   }
 }

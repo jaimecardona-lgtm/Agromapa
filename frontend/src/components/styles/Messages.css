@@ -1,0 +1,275 @@
+/* /mensajes. Mobile: lista -> conversación completa. Escritorio: lista | conversación. */
+.messages-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60vh;
+}
+
+.conversation-list,
+.conversation-thread {
+  background: var(--auth-surface, #ffffff);
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.conversation-list h1 {
+  margin: 0 0 12px;
+  font-size: 1.2rem;
+}
+
+.conversation-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conversation-item {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.conversation-item.active {
+  border-color: #1f6b3a;
+  background: #eef7f1;
+}
+
+.conversation-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conversation-role,
+.conversation-item-offer,
+.conversation-item-meta {
+  font-size: 0.85rem;
+  color: #55655c;
+}
+
+.conversation-role {
+  white-space: nowrap;
+}
+
+.conversation-item-last {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #1f6b3a;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.thread-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.thread-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.thread-header p {
+  margin: 0;
+}
+
+.thread-offer {
+  background: #f4f8f5;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.thread-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messages-back {
+  min-height: 44px;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.thread-placeholder {
+  margin: 0;
+  padding: 24px 8px;
+  text-align: center;
+}
+
+/* Lista de mensajes con scroll interno: el teclado móvil no empuja la página fuera de vista. */
+.message-log {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  min-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 10px;
+  background: #fbfdfb;
+  box-sizing: border-box;
+}
+
+.message {
+  max-width: 85%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--auth-border, #cdd9d1);
+  min-width: 0;
+}
+
+.message.mine {
+  align-self: flex-end;
+  background: #e3f1e7;
+}
+
+.message-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: #55655c;
+  margin-top: 4px;
+}
+
+.message-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-composer textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  max-height: 30vh;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--auth-border, #cdd9d1);
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.message-composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-composer-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Móvil: una sola columna a la vez. El compositor queda fijo al fondo para que
+   textarea y Enviar sigan visibles cuando aparece el teclado. */
+@media (max-width: 767px) {
+  .messages-layout.has-selection .conversation-list {
+    display: none;
+  }
+
+  .message-composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+    background: var(--auth-surface, #ffffff);
+  }
+
+  .messages-layout:not(.has-selection) .conversation-thread {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .messages-layout {
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .messages-back {
+    display: none;
+  }
+
+  .message-log {
+    max-height: 55vh;
+  }
+}

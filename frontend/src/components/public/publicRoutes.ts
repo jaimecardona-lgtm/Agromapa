@@ -5,8 +5,9 @@ import type { GameSlug } from '@/services/gameScores';
 // router: solo se distingue por pathname. Sin dependencias nuevas.
 
 export const PORTAL_PATH = '/juegos';
+export const RANKING_PATH = '/juegos/ranking';
 
-export type PublicRoute = { kind: 'portal' } | { kind: 'game'; slug: GameSlug } | { kind: 'unknown' };
+export type PublicRoute = { kind: 'portal' } | { kind: 'ranking' } | { kind: 'game'; slug: GameSlug } | { kind: 'unknown' };
 
 const GAME_SLUGS: GameSlug[] = ['cosechas', 'eco-puzzle', 'cazadores-residuos'];
 
@@ -17,6 +18,7 @@ export function isPublicGamesPath(pathname: string): boolean {
 export function parsePublicRoute(pathname: string): PublicRoute {
   const normalized = pathname.replace(/\/+$/, '');
   if (normalized === PORTAL_PATH || normalized === '') return { kind: 'portal' };
+  if (normalized === RANKING_PATH) return { kind: 'ranking' };
   const slug = normalized.slice(PORTAL_PATH.length + 1) as GameSlug;
   if (normalized.startsWith(`${PORTAL_PATH}/`) && GAME_SLUGS.includes(slug)) {
     return { kind: 'game', slug };

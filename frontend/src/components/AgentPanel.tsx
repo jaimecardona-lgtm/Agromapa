@@ -173,7 +173,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
             break;
           case 502:
           case 503:
-            displayError = 'El asistente de IA está temporalmente no disponible. Por favor intenta de nuevo.';
+            displayError = 'El asistente no está disponible temporalmente. Puedes seguir explorando el mapa, Mercado y los recursos.';
             break;
           case 504:
             displayError = 'El agente tardó demasiado en responder. Intenta nuevamente.';
@@ -194,7 +194,8 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
         displayError = err.message || displayError;
       }
 
-      setError(displayError);
+      // El error se muestra una sola vez, dentro del chat (no se guarda en el historial).
+      // El banner queda para validaciones previas al envío.
 
       // Add error message to chat (not saved to storage)
       const errorSystemMessage: Message = {
@@ -279,7 +280,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
             <div className="message message-assistant loading">
               <div className="message-bubble">
                 <span className="spinner"></span>
-                <span>Raíces Conectadas está consultando los datos...</span>
+                <span>Consultando datos de Raíces Conectadas...</span>
               </div>
             </div>
           )}
@@ -292,7 +293,7 @@ export function AgentPanel({ municipalityCode, municipalityName, departmentCode 
 
       {/* Input Area */}
       <div className="agent-input-box">
-        <textarea
+        <textarea aria-label="Pregunta para el asistente"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}

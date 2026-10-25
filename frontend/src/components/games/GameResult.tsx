@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { GameScorePayload } from '@/services/gameScores';
 import { useAuth } from '@/auth/AuthContext';
 import { AuthPrompt } from '../auth/AuthPrompt';
+import { RankingSnapshot } from './RankingSnapshot';
 import { ScoreReport } from './ScoreReport';
 import '../styles/GameResult.css';
 
@@ -90,10 +91,11 @@ export function GameResult({
       )}
 
       {scoreReport && <ScoreReport payload={scoreReport} />}
+      {scoreReport && <RankingSnapshot gameSlug={scoreReport.game_slug} score={score} />}
 
       {showAccountCta && (
         <AuthPrompt
-          message="¿Quieres conservar tus resultados y competir en rankings personalizados?"
+          message="¿Quieres guardar tu puntaje y competir con otros jugadores? Regístrate."
           defaultChoice="buyer"
         />
       )}

@@ -6,7 +6,7 @@ import { GameResult } from '../GameResult';
 // El reporte de puntaje hace llamadas de red; aquí solo importa la CTA.
 vi.mock('../ScoreReport', () => ({ ScoreReport: () => null }));
 
-const CTA_TEXT = '¿Quieres conservar tus resultados y competir en rankings personalizados?';
+const CTA_TEXT = '¿Quieres guardar tu puntaje y competir con otros jugadores? Regístrate.';
 
 function renderResult(auth: Partial<AuthContextValue>, withReport = true) {
   const value: AuthContextValue = { ...defaultAuthValue, configured: true, ...auth };

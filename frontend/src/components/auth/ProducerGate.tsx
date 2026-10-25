@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { PRODUCTIVE_RETURN_PATH, rememberReturnPath } from '@/auth/authRoutes';
 import { useAuth } from '@/auth/AuthContext';
 import { AuthPrompt } from './AuthPrompt';
 import '../styles/Auth.css';
@@ -9,18 +10,46 @@ export const PRODUCER_GATE_MESSAGE =
 /**
  * Sustituye los formularios productivos cuando falta sesión o el rol productor.
  * Con sesión y sin rol, ofrece activarlo sin crear una segunda cuenta.
+ * Tras registrarse o entrar vuelve a la gestión productiva, no a /cuenta.
  */
 export function ProducerGate({ children }: { children: ReactNode }) {
-  const { status, roles, setRoleActive } = useAuth();
+  const { status, roles, me, meError, refreshMe, setRoleActive } = useAuth();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const needsLogin = status === 'anonymous';
+
+  useEffect(() => {
+    if (needsLogin) rememberReturnPath(PRODUCTIVE_RETURN_PATH);
+  }, [needsLogin]);
 
   if (status === 'loading') {
     return <p className="auth-muted">Cargando tu cuenta…</p>;
   }
 
   if (status !== 'authenticated') {
-    return <AuthPrompt message={PRODUCER_GATE_MESSAGE} defaultChoice="producer" />;
+    return (
+      <AuthPrompt message={PRODUCER_GATE_MESSAGE} defaultChoice="producer" redirectAfterAuth />
+    );
+  }
+
+  if (roles.includes('producer')) {
+    return <>{children}</>;
+  }
+
+  // Sin /api/me no sabemos qué roles tiene la cuenta: no se puede ofrecer "activar" a ciegas.
+  if (!me) {
+    if (meError) {
+      return (
+        <section className="auth-prompt" aria-label="No pudimos cargar tu cuenta">
+          <p role="alert">{meError}</p>
+          <button type="button" className="auth-primary" onClick={() => void refreshMe()}>
+            Reintentar
+          </button>
+        </section>
+      );
+    }
+    return <p className="auth-muted">Restaurando tu sesión…</p>;
   }
 
   if (!roles.includes('producer')) {

@@ -1,6 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FormEvent } from 'react';
-import { api, Producer, Farm, FarmCropDetail, CurrentOffer } from '@/services/api';
+import { api, Producer, Farm, FarmCropDetail, CurrentOffer, ProductionOffer } from '@/services/api';
+import { errorDetail, identityApi } from '@/services/identity';
+import { navigateTo } from '@/components/public/publicRoutes';
+import { offerPath } from '@/components/marketplace/marketplaceRoutes';
+import { OfferCard } from './operational/OfferCard';
+import { CropImage } from './operational/CropImage';
+import { formatDateShort } from './operational/offerFormat';
+import { formatPricePerUnit } from '@/utils/money';
+import { formatQuantity, unitLabel } from '@/utils/units';
 import { useAuth } from '@/auth/AuthContext';
 import { ProducerGate } from '@/components/auth/ProducerGate';
 import '../styles/OperationalManagement.css';
@@ -10,12 +18,61 @@ type Tab = 'producers' | 'farms' | 'crops' | 'offers' | 'current-offer';
 // Pestañas de escritura productiva: requieren cuenta con rol productor.
 const PRODUCTIVE_TABS: Tab[] = ['producers', 'farms', 'crops', 'offers'];
 
+// Compara nombres de cultivo sin tildes, mayúsculas ni espacios sobrantes (Café == cafe).
+function normalizeCropName(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+}
+
+// Conserva la finca elegida si sigue en la lista; con una sola finca la selecciona sola.
+function keepOrPickFarm(current: Farm | null, farms: Farm[]): Farm | null {
+  const same = current ? farms.find((f) => f.id === current.id) : undefined;
+  if (same) return same;
+  return farms.length === 1 ? farms[0] : null;
+}
+
+function ProducerLinkError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="note" role="alert">
+      <p>{message}</p>
+      <button type="button" onClick={onRetry}>
+        Reintentar
+      </button>
+    </div>
+  );
+}
+
+type OfferFieldErrors = Partial<Record<'crop' | 'quantity' | 'availability_end' | 'price', string>>;
+
+const EMPTY_OFFER_FORM = {
+  available_quantity: '',
+  unit: 'kg',
+  availability_start: '',
+  availability_end: '',
+  price_per_unit: '',
+  description: '',
+};
+
+// Estado de la lista de cultivos: idle (sin pedir), loading, success (incluye lista vacía real) o error.
+type CropsState =
+  | { status: 'idle' }
+  | { status: 'loading'; farmId: string }
+  | { status: 'success'; farmId: string; crops: FarmCropDetail[] }
+  | { status: 'error'; farmId: string; message: string };
+
+type IllustrationState = Record<string, { status: 'pending' | 'none' | 'ready' | 'failed'; message?: string }>;
+
 export function OperationalManagement() {
   const [activeTab, setActiveTab] = useState<Tab>('producers');
   const { status, roles } = useAuth();
   const canManage = status === 'authenticated' && roles.includes('producer');
   const [farms, setFarms] = useState<Farm[]>([]);
-  const [crops, setCrops] = useState<FarmCropDetail[]>([]);
+  // Estado explícito de la lista de cultivos: una sola fuente de verdad, ligada a la finca que respondió.
+  const [cropsState, setCropsState] = useState<CropsState>({ status: 'idle' });
+  // Generación de imagen ilustrativa por cultivo (una vez; sin reintentos automáticos).
+  const [illustrationState, setIllustrationState] = useState<IllustrationState>({});
+  // Solo la última request emitida puede aplicar su respuesta (StrictMode y cambios rápidos).
+  const cropsRequestRef = useRef(0);
+  const selectedFarmIdRef = useRef<string | null>(null);
   const [currentOffers, setCurrentOffers] = useState<CurrentOffer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +81,19 @@ export function OperationalManagement() {
   const [selectedProducer, setSelectedProducer] = useState<Producer | null>(null);
   const [selectedFarm, setSelectedFarm] = useState<Farm | null>(null);
   const [selectedCrop, setSelectedCrop] = useState<FarmCropDetail | null>(null);
+  const selectedFarmId = selectedFarm?.id ?? null;
+  // Cultivos de la finca seleccionada, solo si la respuesta corresponde a ella.
+  const loadedCrops =
+    cropsState.status === 'success' && cropsState.farmId === selectedFarmId ? cropsState.crops : [];
+  // Estado de cultivos solo si corresponde a la finca seleccionada (nunca de otra finca).
+  const selectedCropsState =
+    cropsState.status !== 'idle' && cropsState.farmId === selectedFarmId ? cropsState : null;
+  // El cultivo de la oferta sale solo de la lista de la finca seleccionada.
+  const offerCrop = loadedCrops.find((c) => c.id === selectedCrop?.id) ?? null;
+  // Vinculación del productor de la cuenta: estado propio, para que otras cargas no lo borren.
+  const [producerLoading, setProducerLoading] = useState(false);
+  const [producerError, setProducerError] = useState<string | null>(null);
+  const [producerAttempt, setProducerAttempt] = useState(0);
 
   // Form inputs
   const [farmForm, setFarmForm] = useState({
@@ -43,15 +113,24 @@ export function OperationalManagement() {
     description: '',
     variety: '',
   });
+  const cropNameMatchesExisting =
+    cropForm.crop_name.trim() !== '' &&
+    loadedCrops.some((c) => normalizeCropName(c.crop_name) === normalizeCropName(cropForm.crop_name));
 
-  const [offerForm, setOfferForm] = useState({
-    available_quantity: '',
-    unit: 'kg',
-    availability_start: '',
-    availability_end: '',
-    price_per_unit: '',
-    description: '',
-  });
+  const [offerForm, setOfferForm] = useState(EMPTY_OFFER_FORM);
+  const [offerSaving, setOfferSaving] = useState(false);
+  const [offerMessage, setOfferMessage] = useState<string | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
+  const [myOffers, setMyOffers] = useState<ProductionOffer[]>([]);
+  const [myOffersLoading, setMyOffersLoading] = useState(false);
+  const [myOffersError, setMyOffersError] = useState<string | null>(null);
+  const [showCreateOffer, setShowCreateOffer] = useState(false);
+  const [offerFieldErrors, setOfferFieldErrors] = useState<OfferFieldErrors>({});
+  const [offerActionId, setOfferActionId] = useState<string | null>(null);
+  const [offerActionError, setOfferActionError] = useState<string | null>(null);
+  const myOffersRef = useRef<HTMLDivElement>(null);
+  const offersLoadedOnce = useRef(false);
+  const activeOffersCount = myOffers.filter((o) => o.status === 'available').length;
 
   // Load data
   useEffect(() => {
@@ -62,6 +141,8 @@ export function OperationalManagement() {
   useEffect(() => {
     if (!canManage) return undefined;
     let cancelled = false;
+    setProducerLoading(true);
+    setProducerError(null);
 
     api.operational.producers
       .linkMine()
@@ -69,17 +150,23 @@ export function OperationalManagement() {
         if (cancelled) return;
         setSelectedProducer(res.data);
         const farmsRes = await api.operational.farms.listByProducer(res.data.id);
-        if (!cancelled) setFarms(farmsRes.data);
+        if (cancelled) return;
+        setFarms(farmsRes.data);
+        setSelectedFarm((current) => keepOrPickFarm(current, farmsRes.data));
       })
       .catch((err) => {
-        if (!cancelled) setError('No pudimos cargar tu registro productivo.');
+        if (cancelled) return;
+        setProducerError('No pudimos cargar tu registro productivo.');
         console.error(err);
+      })
+      .finally(() => {
+        if (!cancelled) setProducerLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [canManage]);
+  }, [canManage, producerAttempt]);
 
   async function loadFarmsByProducer(producerId: string) {
     try {
@@ -95,17 +182,74 @@ export function OperationalManagement() {
     }
   }
 
-  async function loadCropsByFarm(farmId: string) {
+  // Lee los cultivos de la finca desde la API (nunca solo del estado local).
+  // Una respuesta se aplica solo si es la última request y la finca sigue seleccionada.
+  const loadCrops = useCallback(async (farmId: string) => {
+    const requestId = ++cropsRequestRef.current;
+    setCropsState({ status: 'loading', farmId });
     try {
-      setLoading(true);
       const res = await api.operational.crops.list(farmId);
-      setCrops(res.data);
-      setError(null);
+      if (requestId !== cropsRequestRef.current || farmId !== selectedFarmIdRef.current) return;
+      setCropsState({ status: 'success', farmId, crops: res.data });
     } catch (err) {
-      setError('Failed to load crops');
+      if (requestId !== cropsRequestRef.current || farmId !== selectedFarmIdRef.current) return;
+      setCropsState({ status: 'error', farmId, message: 'No pudimos cargar los cultivos.' });
+      console.error(err);
+    }
+  }, []);
+
+  // Se carga al entrar a la pestaña Cultivos o al cambiar de finca. Depende del id, no del objeto.
+  useEffect(() => {
+    selectedFarmIdRef.current = selectedFarmId;
+    if ((activeTab === 'crops' || activeTab === 'offers') && canManage && selectedFarmId) {
+      loadCrops(selectedFarmId);
+    }
+  }, [activeTab, canManage, selectedFarmId, loadCrops]);
+
+  // Mis ofertas: fuente real (/api/me/offers) al entrar a la pestaña.
+  const loadMyOffers = useCallback(async () => {
+    setMyOffersLoading(true);
+    setMyOffersError(null);
+    try {
+      const res = await identityApi.myOffers();
+      setMyOffers(res.data);
+      // Primera carga: sin ofertas el formulario queda abierto; con ofertas, cerrado.
+      if (!offersLoadedOnce.current) {
+        offersLoadedOnce.current = true;
+        setShowCreateOffer(res.data.length === 0);
+      }
+    } catch (err) {
+      setMyOffersError(errorDetail(err, 'No pudimos cargar tus ofertas.'));
       console.error(err);
     } finally {
-      setLoading(false);
+      setMyOffersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'offers' && canManage) {
+      loadMyOffers();
+    }
+  }, [activeTab, canManage, loadMyOffers]);
+
+  // El mensaje de éxito se retira solo; también puede cerrarse a mano.
+  useEffect(() => {
+    if (!offerMessage) return undefined;
+    const timer = window.setTimeout(() => setOfferMessage(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [offerMessage]);
+
+  async function setOfferStatus(offer: ProductionOffer, status: 'available' | 'sold_out' | 'inactive') {
+    setOfferActionId(offer.id);
+    setOfferActionError(null);
+    try {
+      await api.operational.offers.update(offer.id, { status });
+      await loadMyOffers();
+    } catch (err) {
+      setOfferActionError(errorDetail(err, 'No pudimos actualizar la oferta. Intenta de nuevo.'));
+      console.error(err);
+    } finally {
+      setOfferActionId(null);
     }
   }
 
@@ -186,6 +330,31 @@ export function OperationalManagement() {
   }
 
   // Crop operations
+  // Imagen ilustrativa por cultivo: no bloquea nada y no reintenta solo.
+  function startIllustration(farmCropId: string) {
+    setIllustrationState((current) => ({ ...current, [farmCropId]: { status: 'pending' } }));
+    api.operational.crops
+      .illustration(farmCropId)
+      .then((res) => {
+        setIllustrationState((current) => ({
+          ...current,
+          [farmCropId]: { status: res.data.status, message: res.data.message ?? undefined },
+        }));
+        // Solo recarga si la imagen cambió; un fallo no genera tráfico extra.
+        if (res.data.status === 'ready' && selectedFarmId) void loadCrops(selectedFarmId);
+      })
+      .catch((err: { response?: { status?: number } }) => {
+        const disabled = err.response?.status === 503;
+        setIllustrationState((current) => ({
+          ...current,
+          [farmCropId]: {
+            status: 'failed',
+            message: disabled ? 'Generación de imágenes no configurada.' : 'No pudimos generar la imagen. Puedes intentarlo de nuevo.',
+          },
+        }));
+      });
+  }
+
   async function handleCreateCrop(e: FormEvent) {
     e.preventDefault();
     if (!selectedFarm) {
@@ -193,16 +362,25 @@ export function OperationalManagement() {
       return;
     }
 
+    const cropName = cropForm.crop_name.trim();
+    if (!cropName) {
+      setError('Escribe el nombre del cultivo.');
+      return;
+    }
+
     try {
       setLoading(true);
-      await api.operational.crops.create(selectedFarm.id, {
-        crop_name: cropForm.crop_name,
+      const created = await api.operational.crops.create(selectedFarm.id, {
+        crop_name: cropName,
         area_hectares: cropForm.area_hectares ? parseFloat(cropForm.area_hectares) : undefined,
         description: cropForm.description,
       });
+      // La imagen ilustrativa arranca aparte: si falla, el cultivo ya está guardado y queda el placeholder.
+      startIllustration(created.data.id);
+      // El formulario se limpia solo después de confirmar el guardado.
       setCropForm({ crop_name: '', area_hectares: '', description: '', variety: '' });
-      await loadCropsByFarm(selectedFarm.id);
       setError(null);
+      await loadCrops(selectedFarm.id);
     } catch (err) {
       setError('Failed to create crop');
       console.error(err);
@@ -214,29 +392,44 @@ export function OperationalManagement() {
   // Offer operations
   async function handleCreateOffer(e: FormEvent) {
     e.preventDefault();
-    if (!selectedCrop) {
-      setError('Select a crop first');
-      return;
-    }
+    setOfferMessage(null);
+    setOfferError(null);
 
+    const quantity = parseFloat(offerForm.available_quantity);
+    const start = offerForm.availability_start;
+    const end = offerForm.availability_end;
+    const price = offerForm.price_per_unit ? parseFloat(offerForm.price_per_unit) : undefined;
+    // Validación junto a cada campo; ningún error envía la petición.
+    const errors: OfferFieldErrors = {};
+    if (!offerCrop) errors.crop = 'Selecciona un cultivo de la finca.';
+    if (!(quantity > 0)) errors.quantity = 'La cantidad disponible debe ser mayor que cero.';
+    if (start && end && end < start) errors.availability_end = 'La fecha de fin no puede ser anterior a la de inicio.';
+    if (price !== undefined && !(price >= 0)) errors.price = 'El precio no puede ser negativo.';
+    setOfferFieldErrors(errors);
+    if (!offerCrop || Object.keys(errors).length > 0) return;
+
+    setOfferSaving(true);
     try {
-      setLoading(true);
-      await api.operational.offers.create(selectedCrop.id, {
-        available_quantity: parseFloat(offerForm.available_quantity),
+      await api.operational.offers.create(offerCrop.id, {
+        available_quantity: quantity,
         unit: offerForm.unit,
-        availability_start: offerForm.availability_start,
-        availability_end: offerForm.availability_end,
-        price_per_unit: offerForm.price_per_unit ? parseFloat(offerForm.price_per_unit) : undefined,
-        description: offerForm.description,
+        // Campos vacíos se omiten: enviar '' no es una fecha válida.
+        availability_start: start || undefined,
+        availability_end: end || undefined,
+        price_per_unit: price,
+        description: offerForm.description.trim() || undefined,
       });
-      setOfferForm({ available_quantity: '', unit: 'kg', availability_start: '', availability_end: '', price_per_unit: '', description: '' });
-      await loadCurrentOffers();
-      setError(null);
+      setOfferForm(EMPTY_OFFER_FORM);
+      setOfferFieldErrors({});
+      setShowCreateOffer(false);
+      setOfferMessage(`Oferta de ${offerCrop.crop_name.trim()} publicada correctamente.`);
+      await loadMyOffers();
+      myOffersRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     } catch (err) {
-      setError('Failed to create offer');
+      setOfferError(errorDetail(err, 'No pudimos publicar la oferta. Revisa los datos e intenta de nuevo.'));
       console.error(err);
     } finally {
-      setLoading(false);
+      setOfferSaving(false);
     }
   }
 
@@ -309,14 +502,14 @@ export function OperationalManagement() {
             {selectedProducer ? (
               <>
                 <form onSubmit={handleCreateFarm} className="form">
-                  <input
+                  <input aria-label="Nombre de la finca"
                     type="text"
                     placeholder="Nombre de la finca"
                     value={farmForm.name}
                     onChange={(e) => setFarmForm({ ...farmForm, name: e.target.value })}
                     required
                   />
-                  <input
+                  <input aria-label="Código municipio (DANE)"
                     type="text"
                     placeholder="Código municipio (DANE)"
                     value={farmForm.municipality_code}
@@ -324,7 +517,7 @@ export function OperationalManagement() {
                     required
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <input
+                    <input aria-label="Latitud"
                       type="number"
                       placeholder="Latitud"
                       step="0.000001"
@@ -332,7 +525,7 @@ export function OperationalManagement() {
                       onChange={(e) => setFarmForm({ ...farmForm, latitude: e.target.value })}
                       required
                     />
-                    <input
+                    <input aria-label="Longitud"
                       type="number"
                       placeholder="Longitud"
                       step="0.000001"
@@ -361,14 +554,14 @@ export function OperationalManagement() {
                     {gpsState === 'unavailable' && '✗ No disponible'}
                     {gpsState === 'error' && '✗ Error'}
                   </button>
-                  <input
+                  <input aria-label="Área (hectáreas)"
                     type="number"
                     placeholder="Área (hectáreas)"
                     step="0.01"
                     value={farmForm.area_ha}
                     onChange={(e) => setFarmForm({ ...farmForm, area_ha: e.target.value })}
                   />
-                  <textarea
+                  <textarea aria-label="Descripción de la finca"
                     placeholder="Descripción"
                     value={farmForm.description}
                     onChange={(e) => setFarmForm({ ...farmForm, description: e.target.value })}
@@ -387,7 +580,6 @@ export function OperationalManagement() {
                       onClick={() => {
                         setSelectedFarm(f);
                         setActiveTab('crops');
-                        loadCropsByFarm(f.id);
                       }}
                     >
                       <div className="item-header">
@@ -399,8 +591,12 @@ export function OperationalManagement() {
                   ))}
                 </div>
               </>
+            ) : producerLoading ? (
+              <p className="note">Cargando tu registro productivo...</p>
+            ) : producerError ? (
+              <ProducerLinkError message={producerError} onRetry={() => setProducerAttempt((n) => n + 1)} />
             ) : (
-              <p className="note">Selecciona un productor para gestionar sus fincas</p>
+              <p className="note">Tu registro productivo aún no está disponible.</p>
             )}
           </div>
         )}
@@ -414,21 +610,35 @@ export function OperationalManagement() {
               <>
                 <form onSubmit={handleCreateCrop} className="form">
                   <input
+                    id="crop-name"
+                    name="crop_name"
                     type="text"
+                    aria-label="Nombre del cultivo"
                     placeholder="Nombre del cultivo"
                     value={cropForm.crop_name}
                     onChange={(e) => setCropForm({ ...cropForm, crop_name: e.target.value })}
                     required
                   />
+                  {cropNameMatchesExisting && (
+                    <p className="note" role="status">
+                      Ya hay un cultivo con este nombre en la finca. Se guardará como uno nuevo.
+                    </p>
+                  )}
                   {/* Variety not in current schema */}
                   <input
+                    id="crop-variety"
+                    name="variety"
                     type="text"
+                    aria-label="Variedad (opcional)"
                     placeholder="Variedad (opcional)"
                     value={cropForm.variety}
                     onChange={(e) => setCropForm({ ...cropForm, variety: e.target.value })}
                   />
                   <input
+                    id="crop-area"
+                    name="area_hectares"
                     type="number"
+                    aria-label="Área en hectáreas"
                     placeholder="Área (hectáreas)"
                     step="0.01"
                     value={cropForm.area_hectares}
@@ -441,84 +651,396 @@ export function OperationalManagement() {
 
                 <div className="list">
                   <h4>Cultivos de la Finca</h4>
-                  {crops.map((c) => (
-                    <div
-                      key={c.id}
-                      className={`item ${selectedCrop?.id === c.id ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedCrop(c);
-                        setActiveTab('offers');
-                      }}
-                    >
-                      <div className="item-header">
-                        <strong>{c.crop_name}</strong>
-                      </div>
-                      {/* c.variety not in current schema */}
-                      {c.area_hectares && <div className="item-detail">📐 {c.area_hectares} ha</div>}
+                  {cropsState.status === 'loading' && cropsState.farmId === selectedFarm.id && (
+                    <p className="note">Cargando cultivos...</p>
+                  )}
+                  {cropsState.status === 'error' && cropsState.farmId === selectedFarm.id && (
+                    <div className="note" role="alert">
+                      <p>{cropsState.message}</p>
+                      <button type="button" onClick={() => loadCrops(selectedFarm.id)}>
+                        Reintentar
+                      </button>
                     </div>
-                  ))}
+                  )}
+                  {cropsState.status === 'success' &&
+                    cropsState.farmId === selectedFarm.id &&
+                    loadedCrops.length === 0 && (
+                      <p className="note">Esta finca todavía no tiene cultivos registrados.</p>
+                    )}
+                  {loadedCrops.map((c) => (
+                      <div
+                        key={c.id}
+                        className={`item ${selectedCrop?.id === c.id ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedCrop(c);
+                          setActiveTab('offers');
+                        }}
+                      >
+                        <div className="crop-media">
+                          <CropImage src={c.illustrative_image_url} cropName={c.crop_name} variant="card" />
+                          {c.illustrative_image_status !== 'ready' && (
+                            <button
+                              type="button"
+                              className="crop-illustration-action"
+                              disabled={illustrationState[c.id]?.status === 'pending'}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                startIllustration(c.id);
+                              }}
+                            >
+                              {illustrationState[c.id]?.status === 'pending' ? 'Generando imagen…' : 'Generar imagen ilustrativa'}
+                            </button>
+                          )}
+                          {illustrationState[c.id]?.message && (
+                            <p className="note" role="status">
+                              {illustrationState[c.id]?.message}
+                            </p>
+                          )}
+                        </div>
+                        <div className="item-header">
+                          <strong>{c.crop_name.trim()}</strong>
+                        </div>
+                        {c.area_hectares != null && (
+                          <div className="item-detail">📐 {c.area_hectares.toFixed(2)} ha</div>
+                        )}
+                        {c.description && <div className="item-detail">{c.description}</div>}
+                        {c.expected_harvest_at && (
+                          <div className="item-detail">🗓 Cosecha esperada: {c.expected_harvest_at}</div>
+                        )}
+                      </div>
+                    ))}
                 </div>
               </>
+            ) : producerLoading ? (
+              <p className="note">Cargando tu registro productivo...</p>
+            ) : producerError ? (
+              <ProducerLinkError message={producerError} onRetry={() => setProducerAttempt((n) => n + 1)} />
+            ) : farms.length === 0 ? (
+              <p className="note">Aún no tienes fincas registradas. Regístralas en la pestaña Fincas.</p>
             ) : (
               <p className="note">Selecciona una finca para gestionar sus cultivos</p>
             )}
           </div>
         )}
 
-        {/* Offers Tab */}
+        {/* Offers Tab: panel de gestión. Mis ofertas primero; el formulario se despliega bajo demanda */}
         {activeTab === 'offers' && canManage && (
-          <div className="section">
-            <h3>Crear Oferta {selectedCrop && `- ${selectedCrop.crop_name}`}</h3>
+          <div className="section offers-panel">
+            <header className="offers-header">
+              <h3>Gestión de ofertas</h3>
+              <p className="note">Administra los productos que tienes disponibles para compradores.</p>
+              <ul className="offers-summary" aria-label="Resumen de ofertas">
+                <li className="offers-chip">
+                  <strong>{activeOffersCount}</strong> {activeOffersCount === 1 ? 'oferta activa' : 'ofertas activas'}
+                </li>
+                <li className="offers-chip">
+                  <strong>{myOffers.length}</strong> {myOffers.length === 1 ? 'oferta total' : 'ofertas totales'}
+                </li>
+              </ul>
+            </header>
 
-            {selectedCrop ? (
-              <form onSubmit={handleCreateOffer} className="form">
-                <input
-                  type="number"
-                  placeholder="Cantidad"
-                  step="0.01"
-                  value={offerForm.available_quantity}
-                  onChange={(e) => setOfferForm({ ...offerForm, available_quantity: e.target.value })}
-                  required
-                />
-                <select
-                  value={offerForm.unit}
-                  onChange={(e) => setOfferForm({ ...offerForm, unit: e.target.value })}
-                >
-                  <option value="kg">kg</option>
-                  <option value="ton">ton</option>
-                  <option value="units">unidades</option>
-                  <option value="liters">litros</option>
-                </select>
-                <input
-                  type="date"
-                  placeholder="Disponible desde"
-                  value={offerForm.availability_start}
-                  onChange={(e) => setOfferForm({ ...offerForm, availability_start: e.target.value })}
-                />
-                <input
-                  type="date"
-                  placeholder="Disponible hasta"
-                  value={offerForm.availability_end}
-                  onChange={(e) => setOfferForm({ ...offerForm, availability_end: e.target.value })}
-                />
-                <input
-                  type="number"
-                  placeholder="Precio por unidad"
-                  step="0.01"
-                  value={offerForm.price_per_unit}
-                  onChange={(e) => setOfferForm({ ...offerForm, price_per_unit: e.target.value })}
-                />
-                <textarea
-                  placeholder="Descripción de la oferta"
-                  value={offerForm.description}
-                  onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })}
-                />
-                <button type="submit" disabled={loading}>
-                  {loading ? 'Creando...' : 'Crear Oferta'}
+            {offerMessage && (
+              <div className="offer-toast" role="status" aria-live="polite">
+                <span>✓ {offerMessage}</span>
+                <button type="button" className="offer-toast-close" aria-label="Cerrar mensaje" onClick={() => setOfferMessage(null)}>
+                  ×
                 </button>
-              </form>
-            ) : (
-              <p className="note">Selecciona un cultivo para crear una oferta</p>
+              </div>
+            )}
+
+            <div ref={myOffersRef} className="offers-mine">
+              <h4>Mis ofertas</h4>
+              {myOffersLoading && <p className="note">Cargando tus ofertas...</p>}
+              {!myOffersLoading && myOffersError && (
+                <div className="note" role="alert">
+                  <p>{myOffersError}</p>
+                  <button type="button" onClick={() => void loadMyOffers()}>
+                    Reintentar
+                  </button>
+                </div>
+              )}
+              {!myOffersLoading && !myOffersError && myOffers.length === 0 && (
+                <div className="offers-empty">
+                  <h5>Aún no tienes ofertas publicadas</h5>
+                  <p>Publica un cultivo disponible para que compradores puedan encontrarlo en el marketplace.</p>
+                  <button
+                    type="button"
+                    className="offers-create-btn"
+                    aria-expanded={showCreateOffer}
+                    aria-controls="create-offer-panel"
+                    onClick={() => setShowCreateOffer(true)}
+                  >
+                    Crear mi primera oferta
+                  </button>
+                </div>
+              )}
+              {offerActionError && (
+                <p className="note" role="alert">
+                  {offerActionError}
+                </p>
+              )}
+              {!myOffersLoading && !myOffersError && myOffers.length > 0 && (
+                <div className="offers-grid">
+                  {myOffers.map((o) => (
+                    <OfferCard
+                      key={o.id}
+                      offer={o}
+                      busy={offerActionId === o.id}
+                      onSetStatus={(status) => void setOfferStatus(o, status)}
+                      onViewMarketplace={() => navigateTo(offerPath(o.id))}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="offers-create-btn offers-toggle"
+              aria-expanded={showCreateOffer}
+              aria-controls="create-offer-panel"
+              onClick={() => setShowCreateOffer((open) => !open)}
+            >
+              {showCreateOffer ? 'Ocultar formulario' : '+ Crear nueva oferta'}
+            </button>
+
+            {showCreateOffer && (
+              <section id="create-offer-panel" className="offer-create-panel" aria-labelledby="create-offer-title">
+                <h4 id="create-offer-title">Crear nueva oferta</h4>
+
+                {farms.length === 0 ? (
+                  producerLoading ? (
+                    <p className="note">Cargando tu registro productivo...</p>
+                  ) : producerError ? (
+                    <ProducerLinkError message={producerError} onRetry={() => setProducerAttempt((n) => n + 1)} />
+                  ) : (
+                    <div className="note">
+                      <p>No tienes fincas registradas. Registra una finca antes de publicar una oferta.</p>
+                      <button type="button" onClick={() => setActiveTab('farms')}>
+                        Ir a Fincas
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <form onSubmit={handleCreateOffer} className="offer-form" noValidate>
+                    <fieldset className="offer-fieldset">
+                      <legend>Producto</legend>
+                      <div className="offer-form-grid">
+                        <div className="offer-field">
+                          <label htmlFor="offer-farm">Finca</label>
+                          <select
+                            id="offer-farm"
+                            name="farm_id"
+                            value={selectedFarmId ?? ''}
+                            onChange={(e) => {
+                              setSelectedFarm(farms.find((f) => f.id === e.target.value) ?? null);
+                              setSelectedCrop(null);
+                              setOfferMessage(null);
+                              setOfferError(null);
+                              setOfferFieldErrors({});
+                            }}
+                          >
+                            {!selectedFarmId && <option value="">Selecciona una finca</option>}
+                            {farms.map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="offer-field">
+                          <label htmlFor="offer-crop">Cultivo</label>
+                          {selectedFarmId && selectedCropsState?.status === 'loading' && (
+                            <p className="note">Cargando cultivos...</p>
+                          )}
+                          {selectedFarmId && selectedCropsState?.status === 'error' && (
+                            <div className="note" role="alert">
+                              <p>{selectedCropsState.message}</p>
+                              <button type="button" onClick={() => loadCrops(selectedFarmId)}>
+                                Reintentar
+                              </button>
+                            </div>
+                          )}
+                          {selectedFarmId && selectedCropsState?.status === 'success' && selectedCropsState.crops.length === 0 && (
+                            <div className="note">
+                              <p>Esta finca todavía no tiene cultivos. Regístralo en la pestaña Cultivos antes de crear una oferta.</p>
+                              <button type="button" onClick={() => setActiveTab('crops')}>
+                                Ir a Cultivos
+                              </button>
+                            </div>
+                          )}
+                          {selectedCropsState?.status === 'success' && loadedCrops.length > 0 && (
+                            <select
+                              id="offer-crop"
+                              name="farm_crop_id"
+                              value={offerCrop?.id ?? ''}
+                              aria-invalid={Boolean(offerFieldErrors.crop)}
+                              aria-describedby={offerFieldErrors.crop ? 'offer-crop-error' : undefined}
+                              onChange={(e) => {
+                                setSelectedCrop(loadedCrops.find((c) => c.id === e.target.value) ?? null);
+                                setOfferMessage(null);
+                                setOfferError(null);
+                              }}
+                            >
+                              <option value="">Selecciona un cultivo</option>
+                              {loadedCrops.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.crop_name.trim()}
+                                  {c.area_hectares != null ? ` · ${c.area_hectares.toFixed(2)} ha` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {offerFieldErrors.crop && (
+                            <p id="offer-crop-error" className="field-error">
+                              {offerFieldErrors.crop}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </fieldset>
+
+                    {offerCrop && (
+                      <>
+                        <fieldset className="offer-fieldset">
+                          <legend>Disponibilidad</legend>
+                          <div className="offer-form-grid">
+                            <div className="offer-field">
+                              <label htmlFor="offer-quantity">Cantidad disponible</label>
+                              <input
+                                id="offer-quantity"
+                                name="available_quantity"
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="0.01"
+                                value={offerForm.available_quantity}
+                                aria-invalid={Boolean(offerFieldErrors.quantity)}
+                                aria-describedby={offerFieldErrors.quantity ? 'offer-quantity-error' : undefined}
+                                onChange={(e) => setOfferForm({ ...offerForm, available_quantity: e.target.value })}
+                                required
+                              />
+                              {offerFieldErrors.quantity && (
+                                <p id="offer-quantity-error" className="field-error">
+                                  {offerFieldErrors.quantity}
+                                </p>
+                              )}
+                            </div>
+                            <div className="offer-field">
+                              <label htmlFor="offer-unit">Unidad</label>
+                              <select
+                                id="offer-unit"
+                                name="unit"
+                                value={offerForm.unit}
+                                onChange={(e) => setOfferForm({ ...offerForm, unit: e.target.value })}
+                              >
+                                <option value="kg">{unitLabel('kg')}</option>
+                                <option value="ton">{unitLabel('ton')}</option>
+                                <option value="units">{unitLabel('units')}</option>
+                                <option value="liters">{unitLabel('liters')}</option>
+                              </select>
+                            </div>
+                            <div className="offer-field">
+                              <label htmlFor="offer-start">Disponible desde</label>
+                              <input
+                                id="offer-start"
+                                name="availability_start"
+                                type="date"
+                                value={offerForm.availability_start}
+                                onChange={(e) => setOfferForm({ ...offerForm, availability_start: e.target.value })}
+                              />
+                            </div>
+                            <div className="offer-field">
+                              <label htmlFor="offer-end">Disponible hasta</label>
+                              <input
+                                id="offer-end"
+                                name="availability_end"
+                                type="date"
+                                value={offerForm.availability_end}
+                                aria-invalid={Boolean(offerFieldErrors.availability_end)}
+                                aria-describedby={offerFieldErrors.availability_end ? 'offer-end-error' : undefined}
+                                onChange={(e) => setOfferForm({ ...offerForm, availability_end: e.target.value })}
+                              />
+                              {offerFieldErrors.availability_end && (
+                                <p id="offer-end-error" className="field-error">
+                                  {offerFieldErrors.availability_end}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="note">
+                            La oferta aparece en el Marketplace desde su fecha de inicio (o desde hoy si no tiene).
+                          </p>
+                        </fieldset>
+
+                        <fieldset className="offer-fieldset">
+                          <legend>Precio y detalle</legend>
+                          <div className="offer-form-grid">
+                            <div className="offer-field">
+                              <label htmlFor="offer-price">Precio por unidad (opcional)</label>
+                              <input
+                                id="offer-price"
+                                name="price_per_unit"
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="0.01"
+                                value={offerForm.price_per_unit}
+                                aria-invalid={Boolean(offerFieldErrors.price)}
+                                aria-describedby={offerFieldErrors.price ? 'offer-price-error' : undefined}
+                                onChange={(e) => setOfferForm({ ...offerForm, price_per_unit: e.target.value })}
+                              />
+                              {offerFieldErrors.price && (
+                                <p id="offer-price-error" className="field-error">
+                                  {offerFieldErrors.price}
+                                </p>
+                              )}
+                            </div>
+                            <div className="offer-field offer-field--wide">
+                              <label htmlFor="offer-description">Descripción (opcional)</label>
+                              <textarea
+                                id="offer-description"
+                                name="description"
+                                rows={3}
+                                value={offerForm.description}
+                                onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        </fieldset>
+
+                        <aside className="offer-preview" aria-label="Vista previa de la oferta">
+                          <span className="offer-preview-label">Vista previa</span>
+                          <strong>{offerCrop.crop_name.trim()}</strong>
+                          <span>{selectedFarm?.name}</span>
+                          <span>
+                            {offerForm.available_quantity ? formatQuantity(parseFloat(offerForm.available_quantity), offerForm.unit) : '—'}
+                            {offerForm.price_per_unit ? ` · ${formatPricePerUnit(parseFloat(offerForm.price_per_unit), offerForm.unit)}` : ''}
+                          </span>
+                          <span>
+                            {offerForm.availability_start || offerForm.availability_end
+                              ? `Disponible ${offerForm.availability_start ? formatDateShort(offerForm.availability_start) : 'desde hoy'}${offerForm.availability_end ? ` - ${formatDateShort(offerForm.availability_end)}` : ''}`
+                              : 'Sin fecha definida'}
+                          </span>
+                        </aside>
+
+                        <div className="offer-submit-row">
+                          <button type="submit" className="offer-submit" disabled={offerSaving}>
+                            {offerSaving ? 'Publicando...' : 'Publicar oferta'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {offerError && (
+                      <p className="note" role="alert">
+                        {offerError}
+                      </p>
+                    )}
+                  </form>
+                )}
+              </section>
             )}
           </div>
         )}
@@ -549,11 +1071,11 @@ export function OperationalManagement() {
                       <strong>Municipio:</strong> {offer.municipality_name}
                     </div>
                     <div className="offer-line">
-                      <strong>Cantidad:</strong> {offer.quantity} {offer.unit}
+                      <strong>Cantidad:</strong> {formatQuantity(offer.quantity, offer.unit)}
                     </div>
                     {offer.price_per_unit && (
                       <div className="offer-line">
-                        <strong>Precio:</strong> ${offer.price_per_unit.toFixed(2)}
+                        <strong>Precio:</strong> {formatPricePerUnit(offer.price_per_unit, offer.unit)}
                       </div>
                     )}
                     {offer.available_from && (

@@ -78,11 +78,11 @@ export interface AgriculturalData {
   average_yield_t_ha?: number;
 }
 
-export interface FarmCrop {
-  id: string;
-  crop_name: string;
-  area_hectares?: number;
-  expected_harvest_at?: string;
+/** Cultivo público de una finca: solo nombre y área. */
+export interface PublicFarmCrop {
+  name: string;
+  area_hectares?: number | null;
+  image_url?: string | null;
 }
 
 export interface Producer {
@@ -111,10 +111,46 @@ export interface Farm {
   area_ha?: number;
   verified?: boolean;
   producer_name?: string;
-  crops?: FarmCrop[];
+  producer_verified?: boolean;
+  crops?: PublicFarmCrop[];
   active?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface PublicTerritory {
+  code: string | null;
+  name: string | null;
+}
+
+/** Oferta vigente dentro del perfil público del productor (sin contacto). */
+export interface PublicProducerOffer {
+  id: string;
+  crop_name: string;
+  farm_id: string;
+  farm_name: string;
+  municipality_code: string | null;
+  municipality_name: string | null;
+  quantity: number;
+  unit: string;
+  price_per_unit: number | null;
+  available_from: string | null;
+  available_until: string | null;
+  status: string;
+  description: string | null;
+  crop_image_url?: string | null;
+}
+
+/** Perfil público del productor. Ningún campo de contacto, email, teléfono ni user_id. */
+export interface PublicProducerProfile {
+  id: string;
+  name: string;
+  verified: boolean;
+  description: string | null;
+  department: PublicTerritory;
+  municipality: PublicTerritory;
+  farms: Farm[];
+  active_offers: PublicProducerOffer[];
 }
 
 export interface FarmCropDetail {
@@ -126,6 +162,17 @@ export interface FarmCropDetail {
   expected_harvest_at?: string;
   created_at: string;
   updated_at: string;
+  /** Imagen ilustrativa generada por IA (no es foto real). Null si no existe. */
+  illustrative_image_url?: string | null;
+  illustrative_image_status?: 'none' | 'pending' | 'ready' | 'failed';
+}
+
+export interface CropIllustrationResponse {
+  farm_crop_id: string;
+  status: 'none' | 'pending' | 'ready' | 'failed';
+  image_url: string | null;
+  label: string | null;
+  message: string | null;
 }
 
 export interface ProductionOffer {
@@ -140,9 +187,31 @@ export interface ProductionOffer {
   description?: string;
   notes?: string;
   harvested_at?: string;
+  /** Solo en /api/me/offers: contexto de cultivo y finca para el listado propio. */
+  crop_name?: string;
+  crop_image_url?: string | null;
+  farm_id?: string;
+  farm_name?: string;
   expected_harvest_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+/** Contacto comercial público. Solo llega cuando el productor marcó contact_visible. */
+export interface ProducerContact {
+  public_phone: string | null;
+  public_email: string | null;
+  whatsapp: string | null;
+}
+
+/** Productor en vista pública: nunca incluye email de cuenta, teléfono legacy ni documento. */
+export interface PublicProducer {
+  id: string;
+  display_name: string;
+  verified: boolean;
+  description: string | null;
+  contact: ProducerContact | null;
+  messaging_available: boolean;
 }
 
 export interface CurrentOffer {
@@ -150,9 +219,13 @@ export interface CurrentOffer {
   farm_crop_id: string;
   farm_id: string;
   farm_name: string;
+  producer_id?: string;
   producer_name: string;
-  producer_phone?: string;
-  producer_email?: string;
+  producer_verified: boolean;
+  producer_contact: ProducerContact | null;
+  messaging_available: boolean;
+  /** Imagen ilustrativa del cultivo (IA). Null si no existe. */
+  crop_image_url?: string | null;
   municipality_name: string;
   municipality_code?: string;
   crop_name: string;
@@ -226,8 +299,8 @@ export const api = {
     producers: {
       /** Vincula (o reactiva) el registro productor de la cuenta autenticada. No recibe body. */
       linkMine: () => apiClient.post<Producer>('/api/operational/producers'),
-      list: () => apiClient.get<Producer[]>('/api/operational/producers'),
-      get: (id: string) => apiClient.get<Producer>(`/api/operational/producers/${id}`),
+      list: () => apiClient.get<PublicProducer[]>('/api/operational/producers'),
+      get: (id: string) => apiClient.get<PublicProducer>(`/api/operational/producers/${id}`),
       update: (id: string, update: Partial<Producer>) =>
         apiClient.patch<Producer>(`/api/operational/producers/${id}`, update),
     },
@@ -245,6 +318,9 @@ export const api = {
       list: (farmId: string) =>
         apiClient.get<FarmCropDetail[]>(`/api/operational/farms/${farmId}/crops`),
       get: (id: string) => apiClient.get<FarmCropDetail>(`/api/operational/farm-crops/${id}`),
+      /** Genera la imagen ilustrativa del cultivo (solo dueño). 503 si la generación no está configurada. */
+      illustration: (farmCropId: string) =>
+        apiClient.post<CropIllustrationResponse>(`/api/operational/farm-crops/${farmCropId}/illustration`),
       update: (id: string, update: Partial<FarmCropDetail>) =>
         apiClient.patch<FarmCropDetail>(`/api/operational/farm-crops/${id}`, update),
     },
@@ -264,7 +340,13 @@ export const api = {
         crop?: string;
         farm_id?: string;
       }) => apiClient.get<{ count: number; data: CurrentOffer[] }>('/api/operational/current-offer', { params: filters }),
+      /** Oferta vigente por id (vista pública). Requiere endpoint GET /api/operational/current-offer/{id}. */
+      get: (id: string) => apiClient.get<CurrentOffer>(`/api/operational/current-offer/${id}`),
     },
+  },
+  marketplace: {
+    /** Perfil público por id de productor (registro de negocio, no user_id). 404 si no está disponible. */
+    producer: (id: string) => apiClient.get<PublicProducerProfile>(`/api/marketplace/producers/${id}`),
   },
   agent: {
     chat: (request: AgentChatRequest) =>

@@ -10,7 +10,7 @@ import {
   markPlayerOnboarded,
   setPlayerAlias,
 } from '@/services/gameScores';
-import { gamePath, navigateTo } from './publicRoutes';
+import { RANKING_PATH, gamePath, navigateTo } from './publicRoutes';
 
 export function PortalPage() {
   // Crea la identidad anónima la primera vez que se entra al portal.
@@ -41,6 +41,11 @@ export function PortalPage() {
         <AliasBar alias={alias} onChange={(value) => setAlias(setPlayerAlias(value))} />
       )}
 
+      <p className="portal-ranking-link">
+        <button type="button" className="ui-btn ui-btn-secondary" onClick={() => navigateTo(RANKING_PATH)}>
+          🏆 Ver ranking
+        </button>
+      </p>
       <section className="portal-grid" aria-label="Juegos disponibles">
         {GAMES.map((game) => (
           <GameCard key={game.slug} game={game} />

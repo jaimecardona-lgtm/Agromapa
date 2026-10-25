@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RANKING_PATH, navigateTo } from '../public/publicRoutes';
 import { CosechasGame } from './games/CosechasGame';
 import { EcoPuzzleGame } from './games/EcoPuzzleGame';
 import { ResidueHuntersGame } from './games/ResidueHuntersGame';
@@ -34,6 +35,9 @@ export function LearnGames() {
       <div className="learn-header">
         <h1>🎮 Aprende Jugando</h1>
         <p>Descubre la biodiversidad, territorio y bioeconomía a través de juegos educativos</p>
+        <button type="button" className="learn-ranking-link" onClick={() => navigateTo(RANKING_PATH)}>
+          🏆 Ranking
+        </button>
       </div>
 
       <div className="games-grid">

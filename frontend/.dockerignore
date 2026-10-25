@@ -1,0 +1,8 @@
+# El contexto de build es ./frontend: sin secretos ni dependencias locales en la imagen.
+.env
+.env.*
+.env.local
+node_modules
+dist
+.vite
+.git

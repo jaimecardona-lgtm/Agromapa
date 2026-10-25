@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { AxiosError } from 'axios';
 import type { Session } from '@supabase/supabase-js';
 import { authConfigured, supabase } from '@/services/supabase';
 import { errorDetail, identityApi, type BusinessRole, type MeResponse } from '@/services/identity';
@@ -54,18 +55,51 @@ export function translateAuthError(message: string): string {
   return 'No pudimos completar la operación. Intenta de nuevo.';
 }
 
+/** Mensaje fijo para la UI: el detalle técnico solo va a consola en desarrollo. */
+const ME_ERROR_MESSAGE = 'No pudimos cargar tu cuenta.';
+const ME_MAX_ATTEMPTS = 2;
+const ME_RETRY_DELAY_MS = 800;
+
+/** Fallo transitorio: sin respuesta (red/timeout) o error del servidor. Un 401/403/404 no se reintenta. */
+function isTransientError(error: unknown): boolean {
+  const status = (error as AxiosError | undefined)?.response?.status;
+  return status === undefined || status >= 500;
+}
+
+/** Vinculación de partidas invitadas: en segundo plano, sin bloquear la cuenta ni borrar nada si falla. */
+function linkGuestScoresInBackground(playerId: string) {
+  identityApi.linkGuestScores(playerId).catch((error: unknown) => {
+    if (import.meta.env.DEV) {
+      console.info('[auth] partidas de invitado pendientes:', errorDetail(error, 'se reintentará al volver a entrar'));
+    }
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>(authConfigured ? 'loading' : 'anonymous');
   const [session, setSession] = useState<Session | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [meError, setMeError] = useState<string | null>(null);
 
   const refreshMe = useCallback(async () => {
-    try {
-      const response = await identityApi.getMe();
-      setMe(response.data);
-    } catch (error) {
-      console.error('No se pudo cargar tu cuenta:', errorDetail(error, 'error de red'));
-      setMe(null);
+    for (let attempt = 1; attempt <= ME_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await identityApi.getMe();
+        setMe(response.data);
+        setMeError(null);
+        return;
+      } catch (error) {
+        if (attempt < ME_MAX_ATTEMPTS && isTransientError(error)) {
+          await new Promise((resolve) => window.setTimeout(resolve, ME_RETRY_DELAY_MS));
+          continue;
+        }
+        if (import.meta.env.DEV) {
+          console.warn('[auth] /api/me no disponible:', errorDetail(error, 'sin detalle'));
+        }
+        // Un fallo al refrescar NO borra la cuenta ya cargada (roles, productor): solo marca el error.
+        setMeError(ME_ERROR_MESSAGE);
+        return;
+      }
     }
   }, []);
 
@@ -77,7 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(nextSession?.access_token ?? null);
       setSession(nextSession);
       setStatus(nextSession ? 'authenticated' : 'anonymous');
-      if (!nextSession) setMe(null);
+      if (!nextSession) {
+        setMe(null);
+        setMeError(null);
+      }
     });
 
     return () => data.subscription.unsubscribe();
@@ -103,17 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Un player_id ya reclamado por otra cuenta responde 409: se ignora sin molestar al usuario.
-      const playerId = getStoredPlayerId();
-      if (playerId) {
-        try {
-          await identityApi.linkGuestScores(playerId);
-        } catch (error) {
-          console.info('Partidas de invitado no vinculadas:', errorDetail(error, 'sin cambios'));
-        }
-      }
-
+      // Orden: /api/me primero (cuenta, roles, productor) y después la vinculación de partidas.
       if (!cancelled) await refreshMe();
+
+      // El player_id se conserva en almacenamiento hasta vincularse; un fallo se reintenta al volver a entrar.
+      // Un player_id ya reclamado por otra cuenta responde 409 y se ignora sin molestar al usuario.
+      const playerId = getStoredPlayerId();
+      if (playerId && !cancelled) linkGuestScoresInBackground(playerId);
     }
 
     syncAccount();
@@ -183,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       me,
+      meError,
       roles: me?.roles ?? [],
       signUp,
       signIn,
@@ -190,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshMe,
       setRoleActive,
     }),
-    [status, user, me, signUp, signIn, signOut, refreshMe, setRoleActive],
+    [status, user, me, meError, signUp, signIn, signOut, refreshMe, setRoleActive],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

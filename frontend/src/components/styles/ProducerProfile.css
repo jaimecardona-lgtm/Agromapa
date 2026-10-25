@@ -1,0 +1,169 @@
+/* Perfil público del productor: página de plataforma, sin formularios ni gráficos. */
+
+.producer-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.producer-header h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 6px;
+  font-size: 26px;
+  color: #1f3d1f;
+}
+
+.producer-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #2c5a2c;
+}
+
+.producer-territory {
+  margin: 0 0 8px;
+  color: #5b6b5b;
+}
+
+.producer-description {
+  margin: 0;
+  max-width: 70ch;
+  color: #33423a;
+}
+
+.producer-summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.producer-summary li {
+  background: #e8f5e9;
+  border: 1px solid #c8e6c9;
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #2c5a2c;
+}
+
+.producer-summary strong {
+  display: block;
+  font-size: 22px;
+}
+
+.producer-section h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  color: #1f3d1f;
+}
+
+.producer-offers,
+.producer-farms {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+}
+
+.producer-offer article,
+.producer-farm article {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e0e6e0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(20, 60, 20, 0.06);
+  min-width: 0;
+}
+
+.producer-offer h3,
+.producer-farm h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #1f3d1f;
+}
+
+.producer-farm-crops {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.producer-farm-offers {
+  margin: 0;
+  font-size: 14px;
+  color: #33423a;
+}
+
+.producer-farm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.producer-state {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+@media (min-width: 720px) {
+  .producer-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .producer-offers,
+  .producer-farms {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.producer-profile button:focus-visible,
+.producer-profile a:focus-visible {
+  outline: 3px solid #2c5a2c;
+  outline-offset: 2px;
+}
+
+/* Popup del mapa: acciones de la finca */
+.farm-popup-content .farm-popup-crops {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.farm-popup-content .farm-popup-offers {
+  margin: 6px 0;
+  font-size: 12px;
+  color: #33423a;
+}
+
+.farm-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.farm-popup-link {
+  background: transparent;
+  border: none;
+  color: #2c5a2c;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 4px;
+}

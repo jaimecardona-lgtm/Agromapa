@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { isProductiveViewRequested } from '@/auth/authRoutes';
+import { MainNavigation, type ViewMode } from './components/MainNavigation';
 import { api, GeoUnit, AgriculturalData, Farm, HealthStatus, AgriculturalCrop } from '@/services/api';
 import { Map, groupCrops, getCropEmoji, GroupedCrop } from '@/components/Map';
 import { StatusPanel } from '@/components/StatusPanel';
@@ -10,7 +12,6 @@ import { EducationalResources } from '@/components/EducationalResources';
 import './App.css';
 
 type NavigationLevel = 'country' | 'department' | 'municipality';
-type ViewMode = 'map' | 'operational' | 'games' | 'resources';
 
 function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -27,7 +28,9 @@ function App() {
   const [munSearchFilter, setMunSearchFilter] = useState('');
   const [expandedCrops, setExpandedCrops] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'info' | 'agent'>('info');
-  const [viewMode, setViewMode] = useState<ViewMode>('map');
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    isProductiveViewRequested(window.location.search) ? 'operational' : 'map',
+  );
 
   // Update URL when navigation state changes
   const updateURL = useCallback((dept?: string, mun?: string, tab?: 'info' | 'agent') => {
@@ -404,37 +407,7 @@ function App() {
           )}
         </nav>
 
-        {/* View Mode Toggle */}
-        <div className="view-mode-toggle">
-          <button
-            className={`view-btn ${viewMode === 'map' ? 'active' : ''}`}
-            onClick={() => setViewMode('map')}
-            title="Ver mapa territorial"
-          >
-            🗺️ Mapa
-          </button>
-          <button
-            className={`view-btn ${viewMode === 'operational' ? 'active' : ''}`}
-            onClick={() => setViewMode('operational')}
-            title="Gestionar productores, fincas y ofertas"
-          >
-            🌾 Gestión Productiva
-          </button>
-          <button
-            className={`view-btn ${viewMode === 'games' ? 'active' : ''}`}
-            onClick={() => setViewMode('games')}
-            title="Aprende jugando con minijuegos educativos"
-          >
-            🎮 Aprende Jugando
-          </button>
-          <button
-            className={`view-btn ${viewMode === 'resources' ? 'active' : ''}`}
-            onClick={() => setViewMode('resources')}
-            title="Accede a materiales educativos"
-          >
-            📚 Recursos
-          </button>
-        </div>
+        <MainNavigation viewMode={viewMode} onChange={setViewMode} />
 
         {/* Main Content: Map + Side Panel or Operational Management */}
         {viewMode === 'map' ? (
@@ -668,8 +641,8 @@ function App() {
                           {farm.crops && farm.crops.length > 0 && (
                             <div className="farm-crops-chips">
                               {farm.crops.map((c) => (
-                                <span key={c.id} className="farm-crop-chip">
-                                  {c.crop_name} {c.area_hectares ? `(${c.area_hectares} ha)` : ''}
+                                <span key={c.name} className="farm-crop-chip">
+                                  {c.name} {c.area_hectares ? `(${c.area_hectares} ha)` : ''}
                                 </span>
                               ))}
                             </div>
@@ -723,7 +696,7 @@ function App() {
                 </p>
 
                 <div className="mun-search-box">
-                  <input
+                  <input aria-label="Buscar municipio o código DANE"
                     type="text"
                     placeholder="Buscar municipio o código DANE..."
                     value={munSearchFilter}

@@ -26,6 +26,8 @@ export interface AuthContextValue {
   status: AuthStatus;
   user: AccountUser | null;
   me: MeResponse | null;
+  /** Motivo legible si /api/me falló (p. ej. backend o Auth no disponibles). Null si no hay error. */
+  meError: string | null;
   roles: BusinessRole[];
   signUp: (input: SignUpInput) => Promise<AuthActionResult>;
   signIn: (email: string, password: string) => Promise<AuthActionResult>;
@@ -42,6 +44,7 @@ export const defaultAuthValue: AuthContextValue = {
   status: 'anonymous',
   user: null,
   me: null,
+  meError: null,
   roles: [],
   signUp: async () => ({ ok: false, message: UNAVAILABLE_MESSAGE }),
   signIn: async () => ({ ok: false, message: UNAVAILABLE_MESSAGE }),

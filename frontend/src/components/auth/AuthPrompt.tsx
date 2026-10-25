@@ -11,6 +11,7 @@ interface AuthPromptProps {
   onGuest?: () => void;
   guestLabel?: string;
   onAuthenticated?: () => void;
+  redirectAfterAuth?: boolean;
 }
 
 /** Aviso con [Crear cuenta] [Iniciar sesión]. No bloquea la navegación. */
@@ -21,6 +22,7 @@ export function AuthPrompt({
   onGuest,
   guestLabel = 'Seguir como invitado',
   onAuthenticated,
+  redirectAfterAuth = false,
 }: AuthPromptProps) {
   const [modal, setModal] = useState<{ open: boolean; mode: 'login' | 'signup' }>({
     open: false,
@@ -50,6 +52,7 @@ export function AuthPrompt({
         defaultChoice={defaultChoice}
         onClose={() => setModal((current) => ({ ...current, open: false }))}
         onAuthenticated={onAuthenticated}
+        redirectAfterAuth={redirectAfterAuth}
       />
     </section>
   );

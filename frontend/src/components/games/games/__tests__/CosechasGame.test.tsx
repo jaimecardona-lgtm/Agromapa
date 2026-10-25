@@ -51,8 +51,9 @@ describe('CosechasGame', () => {
     // Wait for game to start
     await new Promise(resolve => setTimeout(resolve, 4000));
 
-    // Verify basket is in the DOM (keyboard input support)
-    expect(screen.getByText('🧺')).toBeInTheDocument();
+    // Verify basket is in the DOM (keyboard input support). Se busca por la clase de la cesta:
+    // un powerup aleatorio también muestra 🧺 y haría ambiguo un getByText.
+    expect(document.querySelector('.basket-icon')).toBeInTheDocument();
   });
 
   it('score never goes below zero', async () => {
